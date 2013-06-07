@@ -248,24 +248,27 @@ Proof.
   reflexivity.
 Qed.
 
+(* the set of all types *)
 Inductive typ : Set :=
-| tann : rtyp -> tyann -> typ
-| tfun : typ -> typ -> typ
-| tprod : typ -> typ -> typ
+| tann : rtyp -> tyann -> typ (*an annotated base-type is a type*)
+| tfun : typ -> typ -> typ (*a function type is a type*)
+| tprod : typ -> typ -> typ (*a product type is a type*)
 with rtyp : Set :=
 | tnum : rtyp
 .
 
+(* two type annotations are compatible if...*)
 Inductive ann_compatible : tyann -> tyann -> Prop :=
 | ac_equ : forall a,
-  ann_compatible (taann a) (taann a)
+  ann_compatible (taann a) (taann a) (* they are equal*)
 | ac_dyn_left : forall a,
-  ann_compatible tadyn (taann a)
+  ann_compatible tadyn (taann a) (* forall a, a~?*)
 | ac_dyn_right : forall a,
-  ann_compatible (taann a) tadyn
+  ann_compatible (taann a) tadyn (* for all a, ? ~ a*)
 | ac_dyn_both :
-  ann_compatible tadyn tadyn.
+  ann_compatible tadyn tadyn. (* for all a, a ~ ?*)
 
+(* compatible types...*)
 Inductive compatible : typ -> typ -> Prop :=
 | c_num : forall ta1 ta2,
   ann_compatible ta1 ta2 ->
