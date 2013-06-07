@@ -23,6 +23,7 @@ Proof.
   decide equality.
 Qed.
 
+(* Operations on integers Q*)
 Definition op_int (o : op) : Q -> Q -> Q :=
   match o with
   | add => Qplus
@@ -34,8 +35,8 @@ Definition op_int (o : op) : Q -> Q -> Q :=
 (* the annotation algebra might (usually) have laws *)
 Inductive ann : Set :=		(* annotation algebra - should this be a logic? *)
 | anon : ann 			(* neutral element - no annotation *)
-| acst : id -> ann
-| aprm : op -> ann -> ann -> ann
+| acst : id -> ann                (* annoted id *)
+| aprm : op -> ann -> ann -> ann  (* operation on annotation*)
 .
 
 Lemma Id_eq_dec : forall x y : id, {x=y} + {x<>y} .
@@ -64,44 +65,51 @@ Qed.
 
 (* the type annotation algebra extends annotations with a single dynamic annotation *)
 Inductive tyann : Set :=
-| taann : ann -> tyann
-| tadyn : tyann
+| taann : ann -> tyann (*static type annotation*)
+| tadyn : tyann  (*dynamic annotation*)
 .
 
+
+(* relation for cast-related subtyping *)
 Inductive tyann_le : tyann -> tyann -> Prop :=
 | tyann_le_eq : forall tya,
-  tyann_le tya tya
+  tyann_le tya tya (* all type annotations ta le ta *)
 | tyann_le_dyn : forall tya,
-  tyann_le tya tadyn
+  tyann_le tya tadyn (* all type annotation ta le tadynn*)
 .
 
 Definition an_int (o:op) (a1:ann) (a2:ann) :=
   aprm o a1 a2.
 
+(* if we use operations on annotations ... *)
 Inductive an_rel: op -> ann -> ann -> ann -> Prop :=
 | an_add : forall a,
-  an_rel add a a a
+  an_rel add a a a (* a + a = a*)
 | an_sub : forall a,
-  an_rel sub a a a
+  an_rel sub a a a (* a - a = a*)
 | an_mul : forall a1 a2,
-  an_rel mul a1 a2 (an_int mul a1 a2)
+  an_rel mul a1 a2 (an_int mul a1 a2)  (* use annotation algebra for integers*)
 | an_div : forall a1 a2,
-  an_rel div a1 a2 (an_int div a1 a2).
+  an_rel div a1 a2 (an_int div a1 a2). (* use annotation algebra for integers*)
 
+(* what we don't get when we apply operations on annotations*)
+(* complement of an_rel, this will be shown in the following...*)
 Inductive nan_rel: op -> ann -> ann -> ann -> Prop :=
 | nan_add : forall a1 a2 a3,
   (a1 <> a3 \/ a2 <> a3) ->
-  nan_rel add a1 a2 a3
+  nan_rel add a1 a2 a3 (* if not a1 = a2 = a3, then not a1 + a2 = a3*)
 | nan_sub : forall a1 a2 a3,
   (a1 <> a3 \/ a2 <> a3) ->
-  nan_rel sub a1 a2 a3
+  nan_rel sub a1 a2 a3 (* if not a1 = a2 = a3, then not a1 - a2 = a3*)
 | nan_mul : forall a1 a2 a3,
   an_int mul a1 a2 <> a3 ->
-  nan_rel mul a1 a2 a3
+  nan_rel mul a1 a2 a3 (* mul a1 a2 doesn't yield a3 according to annotiation algebra*)
 | nan_div : forall a1 a2 a3,
   an_int div a1 a2 <> a3 ->
   nan_rel div a1 a2 a3.
 
+(* for a qaudruple of operation and three annotations o a1 a2 a3,
+ o a1 a2 cannot at the same time yield a3 and not yield a3*)
 Lemma not_an_and_nan : forall o a1 a2 a3,
   ~ (an_rel o a1 a2 a3 /\ nan_rel o a1 a2 a3).
 Proof.
@@ -117,6 +125,7 @@ Proof.
   unfold not in H0; apply H0; reflexivity.
 Qed.  
 
+(*tuple in an_rel -> tuple not in an_not_nan*)
 Lemma an_not_nan : forall o a1 a2 a3,
   an_rel o a1 a2 a3 -> ~ nan_rel o a1 a2 a3.
 Proof.
@@ -128,6 +137,8 @@ Proof.
   apply H; reflexivity.
 Qed.
 
+
+(* tuple in nan_rel -> not in an_rel*)
 Lemma nan_not_an : forall o a1 a2 a3,
   nan_rel o a1 a2 a3 -> ~ an_rel o a1 a2 a3.
 Proof.
@@ -139,70 +150,71 @@ Proof.
   apply H; reflexivity.
 Qed.
 
+(* all tuples are in an_rel or in nan_rel *)
 Lemma an_or_nan : forall o a1 a2 a3,
   an_rel o a1 a2 a3 \/ nan_rel o a1 a2 a3.
 Proof.
   intros.
   destruct o.
-  (*add*)
+  Case "add". (*add*)
   pose (ann_eq_dec a1 a3) as a1a3.
   pose (ann_eq_dec a2 a3) as a2a3.
   destruct a1a3. destruct a2a3.
   left. subst. constructor.
   right. constructor. right. assumption.
   right. constructor. left. assumption.
-  (*sub*)
+  Case "sub". (*sub*)
   pose (ann_eq_dec a1 a3) as a1a3.
   pose (ann_eq_dec a2 a3) as a2a3.
   destruct a1a3. destruct a2a3.
   left. subst. constructor.
   right. constructor. right. assumption.
   right. constructor. left. assumption.
-  (*mul*)
+  Case "mul". (*mul*)
   pose (ann_eq_dec (an_int mul a1 a2) a3).
   destruct s.
   subst. left. constructor.
   right. constructor. assumption.
-  (*div*)
+  Case "div". (*div*)
   pose (ann_eq_dec (an_int div a1 a2) a3).
   destruct s.
   subst. left. constructor.
   right. constructor. assumption.
 Qed.
 
+(*for all operations o applied to two annotations a1 a2,
+ there exists an a3 such that either o a1 a2 a3 is either in an_rel or nan_rel.*)
 Lemma exists_an_or_nan : forall o a1 a2,
   exists a3, an_rel o a1 a2 a3 \/ nan_rel o a1 a2 a3.
 Proof.
   intros.
   destruct o.
+  Case "add".
   pose (ann_eq_dec a1 a2).
   destruct s.
-  exists a1.
-  left. subst. constructor.
-  exists a2. right. constructor. left. assumption.
+  SCase "a1=a2".
+    exists a1.
+    left. subst. constructor.
+  SCase "a1 <> a2".
+    exists a2. right. constructor. left. assumption.
   
+  Case "sub".
   pose (ann_eq_dec a1 a2).
   destruct s.
-  exists a1.
-  left. subst. constructor.
-  exists a2. right. constructor. left. assumption.
-
-  exists (aprm mul a1 a2). left. constructor.
-  exists (aprm div a1 a2). left. constructor.
+  SCase "a1=a2".
+    exists a1.
+    left. subst. constructor.
+  SCase "a1 <> a2".
+    exists a2. right. constructor. left. assumption.
+  
+  Case "mul".
+    exists (aprm mul a1 a2). left. constructor.
+  Case "div".
+    exists (aprm div a1 a2). left. constructor.
 Qed.
 
 
-
-(*
-Definition an_rel (o:op) (a1 a2 a:ann) : Prop :=
-  match o with
-  | add => a = a1 /\ a = a2
-  | sub => a = a1 /\ a = a2
-  | mul => a = an_int o a1 a2
-  | div => a = an_int o a1 a2
-  end.
-*)
-
+(* relation for value annotations, lifted from an_rel *)
 Inductive van_rel (o:op) : vann -> vann -> vann -> Prop :=
 | vr_static : forall a1 a2 a,
   an_rel o a1 a2 a ->
@@ -211,6 +223,7 @@ Inductive van_rel (o:op) : vann -> vann -> vann -> Prop :=
   an_rel o a1 a2 a ->
   van_rel o (vd a1) (vd a2) (vd a).
 
+(* relation for type annotations, lifted from an_rel *)
 Inductive taan_rel : op -> tyann -> tyann -> tyann -> Prop :=
 | taan_rel_dyn : forall o,
   taan_rel o tadyn tadyn tadyn
@@ -218,7 +231,8 @@ Inductive taan_rel : op -> tyann -> tyann -> tyann -> Prop :=
   an_rel o a1 a2 a ->
   taan_rel o (taann a1) (taann a2) (taann a)
 .
-
+(* an_rel is a function, this means:
+  forall o, a1, a2 there is at most one a such that an_rel o a1 a2 a*)
 Lemma an_rel_function : forall o a1 a2 a a',
   an_rel o a1 a2 a ->
   an_rel o a1 a2 a' ->
