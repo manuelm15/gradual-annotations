@@ -28,13 +28,18 @@ with stype : Set :=
 | tadd : type -> type -> stype
 .
 
+Inductive vann : Set := 
+| vs : ann -> vann
+| vd : ann -> vann
+.
+
 Inductive eterm : Set :=
-| etermd : dterm -> vann -> dterm
+| etermd : dterm -> vann -> eterm
 | evar : id -> eterm
 | eop : op -> eterm -> eterm -> eterm
 | eappl : eterm -> eterm -> eterm
 | ecase : eterm -> id -> eterm -> id -> eterm -> eterm
-with dterm
+with dterm : Set :=
 | dbase : Q -> dterm (*TODO should this really be Q?*)
 | dabstr : id -> eterm -> dterm
 | dlnl : eterm -> dterm
@@ -42,9 +47,9 @@ with dterm
 .
 
 Inductive value : Set :=
-| valuew -> wvalue -> vann -> value
-with wvalue
-| wbase : Q (*TODO: again, should this really be Q?*)
+| valuew : wvalue -> vann -> value
+with wvalue : Set :=
+| wbase : Q -> wvalue (*TODO: again, should this really be Q?*)
 | wabstr : id -> eterm -> wvalue
 | wlnl : value -> wvalue
 | wlnr : value -> wvalue
@@ -57,4 +62,5 @@ Inductive evc : Set :=
 | evccase : evc -> id -> eterm -> id -> eterm -> evc
 | evcinl : evc -> evc
 | evcinr : evc -> evc
-.
+. (* make this a proposition?*)
+
