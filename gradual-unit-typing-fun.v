@@ -63,4 +63,3 @@ Inductive evc : Set :=
 | evcinl : evc -> evc
 | evcinr : evc -> evc
 . (* make this a proposition?*)
-
