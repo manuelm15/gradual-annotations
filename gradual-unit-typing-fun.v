@@ -1,5 +1,4 @@
 Require Export SfLib.
-Require Export QArith_base.
 
 (*
 Inductive op : Set := 
@@ -9,15 +8,27 @@ Inductive op : Set :=
 | div : op
 .*)
 
+Variable B : Set. (*set of base-type values*)
+
 Variable op : Set. (*there is some set off operations on base types,
 this will be lifted to the annotation algebra *)
+
+(*Operations can be applied to base-type values,
+  operation application is a function*)
+Variable b_rel : op -> B -> B -> B -> Prop.
+
+Hypothesis b_rel_function :
+  forall o b1 b2 b b',
+    b_rel o b1 b2 b ->
+    b_rel o b1 b2 b' ->
+    b = b'
+.
 
 Inductive ann : Set :=
 | anon : ann
 | acst : id -> ann
 | aprm : op -> ann -> ann -> ann
 . 
-
 
 (* a relation describing how annotations behave under operations*)
 (* for example, for an annotation a, a + a = a *)
@@ -134,7 +145,6 @@ Theorem join_op_function : forall o ta1 ta2 ta ta',
           join_op o ta1 ta2 ta' ->
           ta = ta'.
 Proof.
-  unfold join_op.
   intros.
   apply ho_join_keep_fun with (f:=(an_rel o)) (ta1:=ta1) (ta2:=ta2).
   apply an_rel_function.
@@ -162,7 +172,7 @@ Inductive eterm : Set :=
 | eappl : eterm -> eterm -> eterm
 | ecase : eterm -> id -> eterm -> id -> eterm -> eterm
 with dterm : Set :=
-| dbase : Q -> dterm (*should this really be Q? Probably not necessary *)
+| dbase : B -> dterm
 | dabstr : id -> eterm -> dterm
 | dlnl : eterm -> dterm
 | dlnr : eterm -> dterm
@@ -171,7 +181,7 @@ with dterm : Set :=
 Inductive value : Set :=
 | valuew : wvalue -> vann -> value
 with wvalue : Set :=
-| wbase : Q -> wvalue 
+| wbase : B -> wvalue 
 | wabstr : id -> eterm -> wvalue
 | wlnl : value -> wvalue
 | wlnr : value -> wvalue
