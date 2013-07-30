@@ -1,16 +1,8 @@
 Require Export SfLib.
 
-(*
-Inductive op : Set := 
-| add : op
-| sub : op
-| mul : op
-| div : op
-.*)
-
 Variable B : Set. (*set of base-type values*)
 
-Variable op : Set. (*there is some set off operations on base types,
+Variable op : Set. (*there is some set of operations on base types,
 this will be lifted to the annotation algebra *)
 
 (*Operations can be applied to base-type values,
@@ -43,18 +35,6 @@ Hypothesis an_rel_function :
                       a = a'.
 (* Note that an_rel in general might be a partial function*)
 
-Inductive tyann : Set :=
-| taan : ann -> tyann
-| tadyn : tyann (* the question mark...*)
-.
-
-(*join function for type annotations and operations, lifted from an_rel*)
-(*Inductive join_op : op -> tyann -> tyann -> tyann -> Prop:=
-| join_op_static : forall o a1 a2 a3,
-                  an_rel o a1 a2 a3 ->
-                  join_op o (taan a1) (taan a2) (taan a3)
-| join_op_dynamic : forall o, join_op o tadyn tadyn tadyn.*)
-
 (*join function for function application, somewhat
  similar to join function on operations...*)
 Variable join_app_stat : ann -> ann -> ann -> Prop.
@@ -73,6 +53,12 @@ Hypothesis join_case_stat_function :
          join_case_stat a1 a2 a ->
          join_case_stat a1 a2 a' ->
          a = a'.
+
+(*Set of type annotations*)
+Inductive tyann : Set :=
+| taan : ann -> tyann
+| tadyn : tyann (* the question mark...*)
+.
 
 (* lift join functions to gradual annotations*)
 Inductive ho_join : (ann -> ann -> ann -> Prop)
@@ -160,8 +146,9 @@ with stype : Set :=
 | tadd : type -> type -> stype
 .
 
+(*set of value annotations*)
 Inductive vann : Set := 
-| vs : ann -> vann
+| vs : ann -> vann 
 | vd : ann -> vann
 .
 
@@ -177,6 +164,7 @@ with dterm : Set :=
 | dlnl : eterm -> dterm
 | dlnr : eterm -> dterm
 .
+(*TODO cast still missing*)
 
 Inductive value : Set :=
 | valuew : wvalue -> vann -> value
@@ -195,7 +183,7 @@ Inductive evc : Set :=
 | evccase : evc -> id -> eterm -> id -> eterm -> evc
 | evcinl : evc -> evc
 | evcinr : evc -> evc
-. (* make this a proposition?*)
+. (* make this something else?*)
 
 
 (*compability relation of value annotations and type annotations*)
