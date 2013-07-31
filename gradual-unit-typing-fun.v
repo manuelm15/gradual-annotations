@@ -152,6 +152,13 @@ Inductive vann : Set :=
 | vd : ann -> vann
 .
 
+(*compability relation of value annotations and type annotations*)
+(*relates D(a) to ? and S(a) to a*)
+Inductive vannCompatTann : vann -> tyann -> Prop :=
+| vcstat : forall ann, vannCompatTann (vs ann) (taan ann)
+| vcdyn : forall ann, vannCompatTann (vd ann)  tadyn
+.
+
 Inductive eterm : Set :=
 | etermd : dterm -> vann -> eterm
 | evar : id -> eterm
@@ -165,6 +172,7 @@ with dterm : Set :=
 | dlnr : eterm -> dterm
 .
 (*TODO cast still missing*)
+(*TODO guard*)
 
 Inductive value : Set :=
 | valuew : wvalue -> vann -> value
@@ -176,21 +184,48 @@ with wvalue : Set :=
 .
 (*make this a proposition ?*)
 
+(*would look like this*)
+Inductive value' : eterm -> Prop :=
+| baseval : forall b va, value' (etermd (dbase b) va)
+| abstrval : forall i va e, value' (etermd (dabstr i e) va)
+| lnlval : forall e va, value' e 
+                           -> value' (etermd (dlnl e) va)
+| lnrval : forall e va, value' e
+                           -> value' (etermd (dlnr e) va)
+.
+
+(* use evaluation context? kind of problematic, because 
+distinct "case"...*)
 Inductive evc : Set :=
 | evcempty : evc
 | evcappl : evc -> eterm -> evc
 | evcvalappl : value -> evc -> evc
 | evccase : evc -> id -> eterm -> id -> eterm -> evc
-| evcinl : evc -> evc
-| evcinr : evc -> evc
-. (* make this something else?*)
-
-
-(*compability relation of value annotations and type annotations*)
-(*relates D(a) to ? and S(a) to a*)
-Inductive vannCompatTann : vann -> tyann -> Prop :=
-| vcstat : forall ann, vannCompatTann (vs ann) (taan ann)
-| vcdyn : forall ann, vannCompatTann (vd ann)  tadyn
+| evclnl : evc -> evc
+| evclnr : evc -> evc
 .
 
+(* substitution function *)
+Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
+   match e1 with
+   | etermd d va => etermd (ssubstd d i e2) va
+   | evar j => if beq_id i j then e2 else evar j
+   | eop o ea eb => eop o (ssubst ea i e2) (ssubst eb i e2)
+   | eappl ea eb => eappl (ssubst ea i e2) (ssubst eb i e2)
+   | ecase ea j eb k ec => ecase (ssubst ea i e2)
+                                 j (if beq_id i j then eb
+                                           else (ssubst eb i e2))
+                                 k (if beq_id i k then ec
+                                           else (ssubst ec i e2))
+   end
+   with ssubstd (d : dterm) (i : id) (e : eterm) :=
+   match d with
+   | dbase b => dbase b
+   | dabstr j e' => if beq_id i j then dabstr j e' else
+                                                dabstr j (ssubst e' i e)
+   | dlnl e' => dlnl (ssubst e' i e)
+   | dlnr e' => dlnr (ssubst e' i e)
+   end. 
+   
+(*TODO cast*)
 
