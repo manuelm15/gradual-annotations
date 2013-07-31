@@ -60,19 +60,19 @@ Inductive tyann : Set :=
 | tadyn : tyann (* the question mark...*)
 .
 
-(* lift join functions to gradual annotations*)
-Inductive ho_join : (ann -> ann -> ann -> Prop)
+(*generate join?*)
+Inductive ho_join_t : (ann -> ann -> ann -> Prop)
    -> tyann -> tyann -> tyann -> Prop :=
-   | ho_join_static : 
+   | ho_join_t_static : 
        forall (f: (ann -> ann -> ann -> Prop)) a1 a2 a, 
-       f a1 a2 a -> ho_join f (taan a1) (taan a2) (taan a)
-   | ho_join_dynamic : forall f, ho_join f tadyn tadyn tadyn.
+       f a1 a2 a -> ho_join_t f (taan a1) (taan a2) (taan a)
+   | ho_join_t_dynamic : forall f, ho_join_t f tadyn tadyn tadyn.
 
 (*if ho_join is applied to a function, the result is a function*)
-Lemma ho_join_keep_fun : forall (f: ann -> ann -> ann -> Prop) 
+Lemma ho_join_t_keep_fun : forall (f: ann -> ann -> ann -> Prop) 
     ta1 ta2 ta ta',
    (forall a1 a2 a a', f a1 a2 a -> f a1 a2 a' -> a = a') ->
-   (((ho_join f) ta1 ta2 ta) -> ((ho_join f) ta1 ta2 ta')
+   (((ho_join_t f) ta1 ta2 ta) -> ((ho_join_t f) ta1 ta2 ta')
     -> ta = ta').
 Proof.
   intros f ta1 ta2 ta ta' f_fun.
@@ -98,66 +98,153 @@ Proof.
       reflexivity.
 Qed.
 
-Definition join_app := ho_join join_app_stat.
+Definition join_app_t := ho_join_t join_app_stat.
 
-Theorem join_app_function : forall ta1 ta2 ta ta',
-          join_app ta1 ta2 ta ->
-          join_app ta1 ta2 ta' ->
+Theorem join_app_t_function : forall ta1 ta2 ta ta',
+          join_app_t ta1 ta2 ta ->
+          join_app_t ta1 ta2 ta' ->
           ta = ta'.
 Proof.
   intros ta1 ta2 ta ta'.
-  apply ho_join_keep_fun.
+  apply ho_join_t_keep_fun.
   apply join_app_stat_function.
 Qed.
 
-Definition join_case := ho_join join_case_stat.
+Definition join_case_t := ho_join_t join_case_stat.
 
-Theorem join_case_function : forall ta1 ta2 ta ta',
-          join_case ta1 ta2 ta ->
-          join_case ta1 ta2 ta' ->
+Theorem join_case_t_function : forall ta1 ta2 ta ta',
+          join_case_t ta1 ta2 ta ->
+          join_case_t ta1 ta2 ta' ->
           ta = ta'.
 Proof.
   intros ta1 ta2 ta ta'.
-  apply ho_join_keep_fun.
+  apply ho_join_t_keep_fun.
   apply join_case_stat_function.
 Qed.
 
-Definition join_op (o:op) : tyann -> tyann -> tyann -> Prop :=
-   ho_join (an_rel o).
+Definition join_op_t (o:op) : tyann -> tyann -> tyann -> Prop :=
+   ho_join_t (an_rel o).
 
      
-Theorem join_op_function : forall o ta1 ta2 ta ta',
-          join_op o ta1 ta2 ta ->
-          join_op o ta1 ta2 ta' ->
+Theorem join_op_t_function : forall o ta1 ta2 ta ta',
+          join_op_t o ta1 ta2 ta ->
+          join_op_t o ta1 ta2 ta' ->
           ta = ta'.
 Proof.
   intros.
-  apply ho_join_keep_fun with (f:=(an_rel o)) (ta1:=ta1) (ta2:=ta2).
+  apply ho_join_t_keep_fun with (f:=(an_rel o)) (ta1:=ta1) (ta2:=ta2).
   apply an_rel_function.
   apply H.
   apply H0.
 Qed.
 
-Inductive type : Set :=
-| tann : stype -> tyann -> type
-with stype : Set :=
-| tnum : stype
-| tfun : type -> type -> stype
-| tadd : type -> type -> stype
-.
-
 (*set of value annotations*)
 Inductive vann : Set := 
-| vs : ann -> vann 
-| vd : ann -> vann
+| vs : ann -> vann  (*static value annotation*)
+| vd : ann -> vann  (*dynamic value annotation*)
 .
 
-(*compability relation of value annotations and type annotations*)
-(*relates D(a) to ? and S(a) to a*)
-Inductive vannCompatTann : vann -> tyann -> Prop :=
-| vcstat : forall ann, vannCompatTann (vs ann) (taan ann)
-| vcdyn : forall ann, vannCompatTann (vd ann)  tadyn
+(*generate join+*)
+Inductive ho_join_v : (ann -> ann -> ann -> Prop)
+                     -> (vann -> vann -> vann -> Prop) :=
+| ho_join_v_static : forall (f: ann -> ann -> ann -> Prop) a1 a2 a3,
+      f a1 a2 a3 -> ho_join_v f (vs a1) (vs a2) (vs a3)
+| ho_join_v_dyn : forall (f: ann -> ann -> ann -> Prop) a1 a2 a3,
+      f a1 a2 a3 -> ho_join_v f (vd a1) (vd a2) (vd a3)
 .
+
+(*everything generated from a function with ho_join_v is a function*)
+Lemma ho_join_v_keep_fun : forall (f : ann -> ann -> ann -> Prop)
+          va1 va2 va va',
+          (forall a1 a2 a a', f a1 a2 a -> f a1 a2 a' -> a = a')
+       -> (ho_join_v f) va1 va2 va
+       -> (ho_join_v f) va1 va2 va'
+       -> (va = va').
+Proof.
+  intros f va1 va2 va va' f_fun.
+  intros.
+  inversion H.
+    inversion H0.
+      assert (a1 = a0) as EQ10.
+        rewrite <- H3 in H8. inversion H8. reflexivity.
+      assert (a4 = a2) as EQ42.
+        rewrite <- H4 in H9. inversion H9. reflexivity.
+      assert (a3 = a5) as EQ35.
+        apply f_fun with (a1:=a1) (a2:=a2).
+        apply H1. rewrite EQ10. rewrite <- EQ42. apply H6.
+      rewrite EQ35. reflexivity.
+      rewrite <- H3 in H8. inversion H8.
+    inversion H0.
+      rewrite <- H3 in H8. inversion H8.
+      assert (a1 = a0) as EQ10.
+        rewrite <- H3 in H8. inversion H8. reflexivity.
+      assert (a4 = a2) as EQ42.
+        rewrite <- H4 in H9. inversion H9. reflexivity.
+      assert (a3 = a5) as EQ35.
+       apply f_fun with (a1:=a1) (a2:=a2).
+       apply H1. rewrite EQ10. rewrite <- EQ42. apply H6.
+       rewrite EQ35. reflexivity.
+Qed.
+
+(*join functions on value annotations*)
+Definition join_app_v := ho_join_v join_app_stat.
+
+Theorem join_app_v_function : forall va1 va2 va va',
+     join_app_v va1 va2 va ->
+     join_app_v va1 va2 va' ->
+     va = va'.
+Proof.
+  intros. 
+  apply ho_join_v_keep_fun with (f:= join_app_stat)
+                                (va1 := va1)
+                                (va2 := va2).
+  apply join_app_stat_function.
+  apply H.
+  apply H0.
+Qed.
+
+Definition join_case_v := ho_join_v join_case_stat.
+
+Theorem join_case_v_function : forall va1 va2 va va', 
+     join_case_v va1 va2 va ->
+     join_case_v va1 va2 va' ->
+     va = va'.
+Proof.
+  intros.
+  apply ho_join_v_keep_fun with (f:= join_case_stat)
+                                (va1 := va1)
+                                (va2 := va2).
+  apply join_case_stat_function.
+  apply H.
+  apply H0.
+Qed.
+
+Definition join_op_v (o:op) : vann -> vann -> vann -> Prop :=
+     ho_join_v (an_rel o).
+
+Theorem join_op_v_function : forall o va1 va2 va va',
+     join_op_v o va1 va2 va ->
+     join_op_v o va1 va2 va' ->
+     va = va'.
+Proof.
+  intros.
+  apply ho_join_v_keep_fun with (f := (an_rel o))
+                                (va1 := va1)
+                                (va2 := va2).
+  apply an_rel_function.
+  apply H.
+
+
+Inductive blame : Set :=
+| pos_blame : blame
+| neg_blame : blame
+.
+
+Definition flip (p:blame) :=
+  match p with
+  | pos_blame => neg_blame
+  | neg_blame => pos_blame
+  end.
 
 Inductive eterm : Set :=
 | etermd : dterm -> vann -> eterm
@@ -172,7 +259,6 @@ with dterm : Set :=
 | dlnr : eterm -> dterm
 .
 (*TODO cast still missing*)
-(*TODO guard*)
 
 Inductive value : Set :=
 | valuew : wvalue -> vann -> value
@@ -205,6 +291,13 @@ Inductive evc : Set :=
 | evclnr : evc -> evc
 .
 
+(*compability relation of value annotations and type annotations*)
+(*relates D(a) to ? and S(a) to a*)
+Inductive vannCompatTann : vann -> tyann -> Prop :=
+| vcstat : forall ann, vannCompatTann (vs ann) (taan ann)
+| vcdyn : forall ann, vannCompatTann (vd ann)  tadyn
+.
+
 (* substitution function *)
 Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
    match e1 with
@@ -225,7 +318,17 @@ Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
                                                 dabstr j (ssubst e' i e)
    | dlnl e' => dlnl (ssubst e' i e)
    | dlnr e' => dlnr (ssubst e' i e)
-   end. 
-   
+   end.
 (*TODO cast*)
 
+(*smallstep semantics*)
+(*Inductive smallstep : eterm -> eterm -> Prop :=
+|*)
+
+Inductive type : Set :=
+| tann : stype -> tyann -> type
+with stype : Set :=
+| tnum : stype
+| tfun : type -> type -> stype
+| tadd : type -> type -> stype
+.
