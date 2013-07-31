@@ -247,48 +247,25 @@ Definition flip (p:blame) :=
   end.
 
 Inductive eterm : Set :=
-| etermd : dterm -> vann -> eterm
 | evar : id -> eterm
 | eop : op -> eterm -> eterm -> eterm
 | eappl : eterm -> eterm -> eterm
 | ecase : eterm -> id -> eterm -> id -> eterm -> eterm
-with dterm : Set :=
-| dbase : B -> dterm
-| dabstr : id -> eterm -> dterm
-| dlnl : eterm -> dterm
-| dlnr : eterm -> dterm
+| dbase : B ->  vann -> eterm
+| dabstr : id -> eterm -> vann -> eterm
+| dlnl : eterm -> vann -> eterm
+| dlnr : eterm -> vann -> eterm
 .
 (*TODO cast still missing*)
 
-Inductive value : Set :=
-| valuew : wvalue -> vann -> value
-with wvalue : Set :=
-| wbase : B -> wvalue 
-| wabstr : id -> eterm -> wvalue
-| wlnl : value -> wvalue
-| wlnr : value -> wvalue
-.
-(*make this a proposition ?*)
-
 (*would look like this*)
 Inductive value' : eterm -> Prop :=
-| baseval : forall b va, value' (etermd (dbase b) va)
-| abstrval : forall i va e, value' (etermd (dabstr i e) va)
+| baseval : forall b va, value' (dbase b va)
+| abstrval : forall i va e, value' (dabstr i e va)
 | lnlval : forall e va, value' e 
-                           -> value' (etermd (dlnl e) va)
+                           -> value' (dlnl e va)
 | lnrval : forall e va, value' e
-                           -> value' (etermd (dlnr e) va)
-.
-
-(* use evaluation context? kind of problematic, because 
-distinct "case"...*)
-Inductive evc : Set :=
-| evcempty : evc
-| evcappl : evc -> eterm -> evc
-| evcvalappl : value -> evc -> evc
-| evccase : evc -> id -> eterm -> id -> eterm -> evc
-| evclnl : evc -> evc
-| evclnr : evc -> evc
+                           -> value' (dlnr e va)
 .
 
 (*compability relation of value annotations and type annotations*)
@@ -301,7 +278,6 @@ Inductive vannCompatTann : vann -> tyann -> Prop :=
 (* substitution function *)
 Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
    match e1 with
-   | etermd d va => etermd (ssubstd d i e2) va
    | evar j => if beq_id i j then e2 else evar j
    | eop o ea eb => eop o (ssubst ea i e2) (ssubst eb i e2)
    | eappl ea eb => eappl (ssubst ea i e2) (ssubst eb i e2)
@@ -310,14 +286,11 @@ Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
                                            else (ssubst eb i e2))
                                  k (if beq_id i k then ec
                                            else (ssubst ec i e2))
-   end
-   with ssubstd (d : dterm) (i : id) (e : eterm) :=
-   match d with
-   | dbase b => dbase b
-   | dabstr j e' => if beq_id i j then dabstr j e' else
-                                                dabstr j (ssubst e' i e)
-   | dlnl e' => dlnl (ssubst e' i e)
-   | dlnr e' => dlnr (ssubst e' i e)
+   | dbase b va => dbase b va
+   | dabstr j e' va => if beq_id i j then dabstr j e' va else
+                                                dabstr j (ssubst e' i e2) va
+   | dlnl e' va => dlnl (ssubst e' i e2) va
+   | dlnr e' va  => dlnr (ssubst e' i e2) va
    end.
 (*TODO cast*)
 
