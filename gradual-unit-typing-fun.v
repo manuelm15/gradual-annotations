@@ -15,6 +15,7 @@ Hypothesis b_rel_function :
     b_rel o b1 b2 b' ->
     b = b'
 .
+(* TODO n-ary operations *)
 
 Inductive ann : Set :=
 | anon : ann
@@ -260,7 +261,7 @@ Inductive eterm : Type :=
 | eappl : eterm -> eterm -> eterm
 | ecase : eterm -> id -> eterm -> id -> eterm -> eterm
 | ecast : eterm -> type -> type -> blame -> eterm
-| eguard : (tyann -> tyann -> tyann -> Prop) -> vann -> eterm -> eterm
+| eguard : (vann -> vann -> vann -> Prop) -> vann -> eterm -> eterm
 (*guard is an auxillary term to remember what join-function to use,\
 with which argument*)
 | dbase : B ->  vann -> eterm
@@ -270,13 +271,13 @@ with which argument*)
 .
 
 
-Inductive value' : eterm -> Prop :=
-| baseval : forall b va, value' (dbase b va)
-| abstrval : forall i va e, value' (dabstr i e va)
-| lnlval : forall e va, value' e 
-                           -> value' (dlnl e va)
-| lnrval : forall e va, value' e
-                           -> value' (dlnr e va)
+Inductive value : eterm -> Prop :=
+| baseval : forall b va, value (dbase b va)
+| abstrval : forall i va e, value (dabstr i e va)
+| lnlval : forall e va, value e 
+                           -> value (dlnl e va)
+| lnrval : forall e va, value e
+                           -> value (dlnr e va)
 .
 
 (*compability relation of value annotations and type annotations*)
@@ -306,7 +307,70 @@ Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
    | dlnr e' va  => dlnr (ssubst e' i e2) va
    end.
 
-(*smallstep semantics*)
-(*Inductive smallstep : eterm -> eterm -> Prop :=
-|*)
-
+Inductive smallstep : eterm -> eterm -> Prop :=
+| ss_beta : forall i e1 e2 va,
+  value e2 ->
+  smallstep (eappl (dabstr i e1 va) e2)
+            (eguard join_app_v va (ssubst e1 i e2))
+| ss_case_lnl : forall i j e e1 e2 va,
+  value e ->
+  smallstep (ecase (dlnl e va) i e1 j e2)
+            (eguard join_case_v va (ssubst e1 i e))
+| ss_case_lnr : forall i j e e1 e2 va,
+  value e ->
+  smallstep (ecase (dlnr e va) i e1 j e2)
+            (eguard join_case_v va (ssubst e2 j e))
+| ss_guard_base : forall (f:vann -> vann -> vann -> Prop) b va va1 va2,
+  f va1 va2 va ->
+  smallstep (eguard f va1 (dbase b va2))
+            (dbase b va)
+| ss_guard_abstr : forall (f:vann -> vann -> vann -> Prop) i e va va1 va2,
+  f va1 va2 va ->
+  smallstep (eguard f va1 (dabstr i e va2))
+            (dabstr i e va)
+| ss_guard_dlnl : forall (f: vann -> vann -> vann -> Prop) e va va1 va2,
+  value e ->
+  f va1 va2 va ->
+  smallstep (eguard f va1 (dlnl e va2))
+            (dlnl e va)
+| ss_guard_dlnr : forall (f: vann -> vann -> vann -> Prop) e va va1 va2,
+  value e ->
+  f va1 va2 va ->
+  smallstep (eguard f va1 (dlnr e va2))
+            (dlnr e va2)
+| ss_prim : forall o b1 b2 b va1 va2 va,
+  join_op_v o va1 va2 va ->
+  b_rel o b1 b2 b ->
+  smallstep (eop o (dbase b1 va1) (dbase b2 va2)) (dbase b va)
+(*| ss_cast : forall e t1 t2 v p,
+  value e ->
+  vcast e t1 t2 v p ->
+  smallstep (ecast e t1 t2 p) v*)
+| ss_ctx1 : forall e1 e1' e2,
+  smallstep e1 e1' ->
+  smallstep (eappl e1 e2) (eappl e1' e2)
+| ss_ctx11 : forall i va e1 e2 e2',
+  smallstep e2 e2' ->
+  smallstep (eappl (dabstr i e1 va) e2) (eappl (dabstr i e1 va) e2')
+| ss_ctx2 : forall o e1 e1' e2,
+  smallstep e1 e1' ->
+  smallstep (eop o e1 e2) (eop o e1' e2)
+| ss_ctx3 : forall o n1 a1 e2 e2',
+  smallstep e2 e2' ->
+  smallstep (eop o (dbase n1 a1) e2) (eop o (dbase n1 a1) e2')
+| ss_ctx_guard : forall f va e e',
+  smallstep e e' ->
+  smallstep (eguard f va e) (eguard f va e')
+| ss_ctx_case : forall i j e1 e2 e e',
+  smallstep e e' ->
+  smallstep (ecase e i e1 j e2) (ecase e' i e1 j e2)
+| ss_ctx_lnl : forall va e e',
+  smallstep e e' ->
+  smallstep (dlnl e va) (dlnl e' va)
+| ss_ctx_lnr : forall va e e'
+  smallstep e e' ->
+  smallstep (dlnr e va) (dlnr e' va)
+(*| ss_ctx5 : forall e e' t1 t2 p,
+  smallstep e e' ->
+  smallstep (ecast e t1 t2 p) (ecast e' t1 t2 p)*).
+(*TODO: cast, case*)
