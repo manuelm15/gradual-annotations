@@ -235,6 +235,14 @@ Proof.
   apply H.
 
 
+Inductive type : Set :=
+| tann : stype -> tyann -> type
+with stype : Set :=
+| tbase : stype
+| tfun : type -> type -> stype
+| tadd : type -> type -> stype
+.
+
 Inductive blame : Set :=
 | pos_blame : blame
 | neg_blame : blame
@@ -246,19 +254,22 @@ Definition flip (p:blame) :=
   | neg_blame => pos_blame
   end.
 
-Inductive eterm : Set :=
+Inductive eterm : Type :=
 | evar : id -> eterm
 | eop : op -> eterm -> eterm -> eterm
 | eappl : eterm -> eterm -> eterm
 | ecase : eterm -> id -> eterm -> id -> eterm -> eterm
+| ecast : eterm -> type -> type -> blame -> eterm
+| eguard : (tyann -> tyann -> tyann -> Prop) -> vann -> eterm -> eterm
+(*guard is an auxillary term to remember what join-function to use,\
+with which argument*)
 | dbase : B ->  vann -> eterm
 | dabstr : id -> eterm -> vann -> eterm
 | dlnl : eterm -> vann -> eterm
 | dlnr : eterm -> vann -> eterm
 .
-(*TODO cast still missing*)
 
-(*would look like this*)
+
 Inductive value' : eterm -> Prop :=
 | baseval : forall b va, value' (dbase b va)
 | abstrval : forall i va e, value' (dabstr i e va)
@@ -286,22 +297,16 @@ Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
                                            else (ssubst eb i e2))
                                  k (if beq_id i k then ec
                                            else (ssubst ec i e2))
+   | ecast ea t1 t2 b => ecast (ssubst ea i e2) t1 t2 b
+   | eguard f va ea => eguard f va (ssubst ea i e2)
    | dbase b va => dbase b va
    | dabstr j e' va => if beq_id i j then dabstr j e' va else
                                                 dabstr j (ssubst e' i e2) va
    | dlnl e' va => dlnl (ssubst e' i e2) va
    | dlnr e' va  => dlnr (ssubst e' i e2) va
    end.
-(*TODO cast*)
 
 (*smallstep semantics*)
 (*Inductive smallstep : eterm -> eterm -> Prop :=
 |*)
 
-Inductive type : Set :=
-| tann : stype -> tyann -> type
-with stype : Set :=
-| tnum : stype
-| tfun : type -> type -> stype
-| tadd : type -> type -> stype
-.
