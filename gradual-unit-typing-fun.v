@@ -61,7 +61,7 @@ Inductive tyann : Set :=
 | tadyn : tyann (* the question mark...*)
 .
 
-(*generate join?*)
+(*generator for join functions on type annotations*)
 Inductive ho_join_t : (ann -> ann -> ann -> Prop)
    -> tyann -> tyann -> tyann -> Prop :=
    | ho_join_t_static : 
@@ -145,7 +145,7 @@ Inductive vann : Set :=
 | vd : ann -> vann  (*dynamic value annotation*)
 .
 
-(*generate join+*)
+(*generator for join functions on value annotations*)
 Inductive ho_join_v : (ann -> ann -> ann -> Prop)
                      -> (vann -> vann -> vann -> Prop) :=
 | ho_join_v_static : forall (f: ann -> ann -> ann -> Prop) a1 a2 a3,
@@ -241,7 +241,7 @@ Inductive type : Set :=
 with stype : Set :=
 | tbase : stype
 | tfun : type -> type -> stype
-| tadd : type -> type -> stype
+| tsum : type -> type  -> stype
 .
 
 Inductive blame : Set :=
@@ -262,7 +262,7 @@ Inductive eterm : Type :=
 | ecase : eterm -> id -> eterm -> id -> eterm -> eterm
 | ecast : eterm -> type -> type -> blame -> eterm
 | eguard : (vann -> vann -> vann -> Prop) -> vann -> eterm -> eterm
-(*guard is an auxillary term to remember what join-function to use,\
+(*guard is an auxillary term to remember what join-function to use,
 with which argument*)
 | dbase : B ->  vann -> eterm
 | dabstr : id -> eterm -> vann -> eterm
@@ -282,9 +282,9 @@ Inductive value : eterm -> Prop :=
 
 (*compability relation of value annotations and type annotations*)
 (*relates D(a) to ? and S(a) to a*)
-Inductive vannCompatTann : vann -> tyann -> Prop :=
-| vcstat : forall ann, vannCompatTann (vs ann) (taan ann)
-| vcdyn : forall ann, vannCompatTann (vd ann)  tadyn
+Inductive vtann_compatible2 : vann -> tyann -> Prop :=
+| vcts2 : forall ann, vtann_compatible2 (vs ann) (taan ann)
+| vctd2 : forall ann, vtann_compatible2 (vd ann)  tadyn
 .
 
 (* substitution function *)
@@ -306,6 +306,38 @@ Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
    | dlnl e' va => dlnl (ssubst e' i e2) va
    | dlnr e' va  => dlnr (ssubst e' i e2) va
    end.
+
+(*other way of saying this is*)
+Inductive vtann_compatible (a : ann) : vann -> tyann -> Prop :=
+| vtcs : vtann_compatible a (vs a) (taan a)
+| vtcd : vtann_compatible a (vs a) (taan a)
+.
+
+(* vcast e1 t1 t2 e2 p: cast from e1 of type t1 to type t2 with blame p 
+   results in e2 *)
+Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
+| vc_base : forall b a va1 va2 ta1 ta2 p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dbase b va1) (tann tbase ta1) (tann tbase ta2) (dbase b va2) p
+| vc_lam : forall a va1 va2 i e ta1 ta2 t1a t1b t2a t2b p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dabstr i e va1) (tann (tfun t1a t1b) ta1) (tann (tfun t2a t2b) ta2) 
+        (dabstr i 
+            (ecast (eappl (dabstr i e va1) (ecast (evar i) t2a t1a (flip p)))
+            t1b t2b p) va2) p
+| vc_lnl : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dlnl e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
+      (dlnl (ecast e t1a t2a p) va2) p
+| vc_lnr : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dlnr e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
+      (dlnr (ecast e t1b t2b p) va2) p
+.
 
 Inductive smallstep : eterm -> eterm -> Prop :=
 | ss_beta : forall i e1 e2 va,
@@ -342,10 +374,10 @@ Inductive smallstep : eterm -> eterm -> Prop :=
   join_op_v o va1 va2 va ->
   b_rel o b1 b2 b ->
   smallstep (eop o (dbase b1 va1) (dbase b2 va2)) (dbase b va)
-(*| ss_cast : forall e t1 t2 v p,
+| ss_cast : forall e t1 t2 v p,
   value e ->
   vcast e t1 t2 v p ->
-  smallstep (ecast e t1 t2 p) v*)
+  smallstep (ecast e t1 t2 p) v
 | ss_ctx1 : forall e1 e1' e2,
   smallstep e1 e1' ->
   smallstep (eappl e1 e2) (eappl e1' e2)
@@ -367,10 +399,10 @@ Inductive smallstep : eterm -> eterm -> Prop :=
 | ss_ctx_lnl : forall va e e',
   smallstep e e' ->
   smallstep (dlnl e va) (dlnl e' va)
-| ss_ctx_lnr : forall va e e'
+| ss_ctx_lnr : forall va e e',
   smallstep e e' ->
   smallstep (dlnr e va) (dlnr e' va)
-(*| ss_ctx5 : forall e e' t1 t2 p,
+| ss_ctx5 : forall e e' t1 t2 p,
   smallstep e e' ->
-  smallstep (ecast e t1 t2 p) (ecast e' t1 t2 p)*).
-(*TODO: cast, case*)
+  smallstep (ecast e t1 t2 p) (ecast e' t1 t2 p).
+
