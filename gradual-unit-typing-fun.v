@@ -406,3 +406,16 @@ Inductive smallstep : eterm -> eterm -> Prop :=
   smallstep e e' ->
   smallstep (ecast e t1 t2 p) (ecast e' t1 t2 p).
 
+Lemma values_dont_reduce : forall e,
+  value e -> ~ (exists e' , smallstep e e').
+Proof.
+  (*unfold not.
+  intros.
+  inversion H0; subst.
+  inversion H; subst.
+  inversion H1.
+  inversion H1.
+  inversion H. subst.
+  inversion H4.*) (*this requires an induction proof*)
+Qed.
+
