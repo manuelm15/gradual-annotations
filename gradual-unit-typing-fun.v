@@ -234,6 +234,8 @@ Proof.
                                 (va2 := va2).
   apply an_rel_function.
   apply H.
+  apply H0.
+Qed.
 
 
 Inductive type : Set :=
@@ -256,18 +258,20 @@ Definition flip (p:blame) :=
   end.
 
 Inductive eterm : Type :=
-| evar : id -> eterm
-| eop : op -> eterm -> eterm -> eterm
-| eappl : eterm -> eterm -> eterm
-| ecase : eterm -> id -> eterm -> id -> eterm -> eterm
-| ecast : eterm -> type -> type -> blame -> eterm
+| evar : id -> eterm (* a variable*)
+| eop : op -> eterm -> eterm -> eterm (*an operation applied to two terms*)
+| eappl : eterm -> eterm -> eterm 
+          (* application of lambda-abstraction to a term*)
+| ecase : eterm -> id -> eterm -> id -> eterm -> eterm (*case*)
+| ecast : eterm -> type -> type -> blame -> eterm 
+          (*cast from one type to another with blame*)
 | eguard : (vann -> vann -> vann -> Prop) -> vann -> eterm -> eterm
 (*guard is an auxillary term to remember what join-function to use,
 with which argument*)
-| dbase : B ->  vann -> eterm
-| dabstr : id -> eterm -> vann -> eterm
-| dlnl : eterm -> vann -> eterm
-| dlnr : eterm -> vann -> eterm
+| dbase : B ->  vann -> eterm (*value of base-type, a constant*)
+| dabstr : id -> eterm -> vann -> eterm (*lambda-expression*)
+| dlnl : eterm -> vann -> eterm (*lnl e va*)
+| dlnr : eterm -> vann -> eterm (*lnr e va*)
 .
 
 
@@ -285,6 +289,39 @@ Inductive value : eterm -> Prop :=
 Inductive vtann_compatible2 : vann -> tyann -> Prop :=
 | vcts2 : forall ann, vtann_compatible2 (vs ann) (taan ann)
 | vctd2 : forall ann, vtann_compatible2 (vd ann)  tadyn
+.
+
+
+(*other way of saying this is*)
+Inductive vtann_compatible (a : ann) : vann -> tyann -> Prop :=
+| vtcs : vtann_compatible a (vs a) (taan a)
+| vtcd : vtann_compatible a (vd a) tadyn
+.
+
+(* vcast e1 t1 t2 e2 p: cast from e1 of type t1 to type t2 with blame p 
+   results in e2 *)
+Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
+| vc_base : forall b a va1 va2 ta1 ta2 p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dbase b va1) (tann tbase ta1) (tann tbase ta2) (dbase b va2) p
+| vc_lam : forall a va1 va2 i e ta1 ta2 t1a t1b t2a t2b p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dabstr i e va1) (tann (tfun t1a t1b) ta1) (tann (tfun t2a t2b) ta2) 
+        (dabstr i 
+            (ecast (eappl (dabstr i e va1) (ecast (evar i) t2a t1a (flip p)))
+            t1b t2b p) va2) p  (*RC-SG-CAST-FUN*)
+| vc_lnl : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dlnl e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
+      (dlnl (ecast e t1a t2a p) va2) p
+| vc_lnr : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
+  vtann_compatible a va1 ta1 ->
+  vtann_compatible a va2 ta2 ->
+  vcast (dlnr e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
+      (dlnr (ecast e t1b t2b p) va2) p
 .
 
 (* substitution function *)
@@ -306,38 +343,6 @@ Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
    | dlnl e' va => dlnl (ssubst e' i e2) va
    | dlnr e' va  => dlnr (ssubst e' i e2) va
    end.
-
-(*other way of saying this is*)
-Inductive vtann_compatible (a : ann) : vann -> tyann -> Prop :=
-| vtcs : vtann_compatible a (vs a) (taan a)
-| vtcd : vtann_compatible a (vs a) (taan a)
-.
-
-(* vcast e1 t1 t2 e2 p: cast from e1 of type t1 to type t2 with blame p 
-   results in e2 *)
-Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
-| vc_base : forall b a va1 va2 ta1 ta2 p,
-  vtann_compatible a va1 ta1 ->
-  vtann_compatible a va2 ta2 ->
-  vcast (dbase b va1) (tann tbase ta1) (tann tbase ta2) (dbase b va2) p
-| vc_lam : forall a va1 va2 i e ta1 ta2 t1a t1b t2a t2b p,
-  vtann_compatible a va1 ta1 ->
-  vtann_compatible a va2 ta2 ->
-  vcast (dabstr i e va1) (tann (tfun t1a t1b) ta1) (tann (tfun t2a t2b) ta2) 
-        (dabstr i 
-            (ecast (eappl (dabstr i e va1) (ecast (evar i) t2a t1a (flip p)))
-            t1b t2b p) va2) p
-| vc_lnl : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
-  vtann_compatible a va1 ta1 ->
-  vtann_compatible a va2 ta2 ->
-  vcast (dlnl e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
-      (dlnl (ecast e t1a t2a p) va2) p
-| vc_lnr : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
-  vtann_compatible a va1 ta1 ->
-  vtann_compatible a va2 ta2 ->
-  vcast (dlnr e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
-      (dlnr (ecast e t1b t2b p) va2) p
-.
 
 Inductive smallstep : eterm -> eterm -> Prop :=
 | ss_beta : forall i e1 e2 va,
@@ -409,13 +414,59 @@ Inductive smallstep : eterm -> eterm -> Prop :=
 Lemma values_dont_reduce : forall e,
   value e -> ~ (exists e' , smallstep e e').
 Proof.
-  (*unfold not.
+  unfold not.
   intros.
-  inversion H0; subst.
-  inversion H; subst.
-  inversion H1.
-  inversion H1.
-  inversion H. subst.
-  inversion H4.*) (*this requires an induction proof*)
+  induction e; inversion H; subst; inversion H0; inversion H1.
+  (* value dlnl *)
+  apply IHe. apply H2.
+    exists e'. apply H6.
+  (* value dlnr *)
+  apply IHe. apply H2.
+    exists e'. apply H6.
 Qed.
 
+(* typing environment*)
+Definition tenv := partial_map type.
+
+Inductive typing : tenv -> eterm -> type -> Prop :=
+| ty_base : forall te va ta b,
+  vtann_compatible2 va ta ->
+  typing te (dbase b va)  (tann tbase ta) (*RC-T-B*)
+| ty_var : forall te t i,
+  Some t = te i ->
+  typing te (evar i) t (*RC-T-VAR*)
+| ty_abstr : forall va ta te i e t' t,
+  vtann_compatible2 va ta ->
+  typing (extend te i t') e t ->
+  typing te (dabstr i e va) (tann (tfun t' t) ta) (*RC-T-ABS*)
+| ty_guard : forall te e s va' ta ta' ta'' f,
+  typing te e (tann s ta'') ->
+  ((ho_join_t f) ta' ta'' ta) ->
+  vtann_compatible2 va' ta' -> (*TODO really?*)
+  typing te (eguard (ho_join_v f) va' e) (tann s ta) (*RC-T-GUARD*)
+| ty_inl : forall va ta te e t1 t2,
+  vtann_compatible2 va ta ->
+  typing te e t1 ->
+  typing te (dlnl e va) (tann (tsum t1 t2) ta) (*RC-T-INL*)
+| ty_inr : forall va ta te e t1 t2,
+  vtann_compatible2 va ta ->
+  typing te e t2 ->
+  typing te (dlnr e va) (tann (tsum t1 t2) ta) (*RC-T-INR*)
+| ty_op : forall te e1 e2 ta1 ta2 ta o,
+  typing te e1 (tann tbase ta1) ->
+  typing te e2 (tann tbase ta2) ->
+  join_op_t o ta1 ta2 ta ->
+  typing te (eop o e1 e2) (tann tbase ta) (*RC-T-OP*)
+| ty_app : forall te e1 e2 s t2 ta ta1 ta2,
+  typing te e1 (tann (tfun t2 (tann s ta1)) ta) ->
+  typing te e2 t2 ->
+  join_app_t ta ta1 ta2 ->
+  typing te (eappl e1 e2) (tann s ta2) (*RC-T-APP*)
+| ty_case : forall te e e1 e2 i j t1 t2 s ta ta1 ta2,
+  typing te e (tann (tsum t1 t2) ta1) ->
+  typing (extend te i t1) e1 (tann s ta) ->
+  typing (extend te j t2) e2 (tann s ta) ->
+  join_case_t ta1 ta ta2 -> (*TODO argument order*)
+  typing te (ecase e i e1 j e2) (tann s ta2) (*RC-T-CASE*)
+(*| ty_cast : ...*)
+.
