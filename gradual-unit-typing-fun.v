@@ -428,6 +428,34 @@ Qed.
 (* typing environment*)
 Definition tenv := partial_map type.
 
+(*compatibility between type annotations*)
+Inductive ann_compatible : tyann -> tyann -> Prop :=
+| ac_equ : forall a,
+  ann_compatible (taan a) (taan a)
+| ac_dyn_left : forall a,
+  ann_compatible tadyn (taan a)
+| ac_dyn_right : forall a,
+  ann_compatible (taan a) tadyn
+| ac_dyn_both :
+  ann_compatible tadyn tadyn.
+
+(*compatibility between types*)
+Inductive compatible : type -> type -> Prop :=
+| c_num : forall ta1 ta2,
+  ann_compatible ta1 ta2 ->
+  compatible (tann tbase ta1) (tann tbase ta2)
+| c_fun : forall t1a t1b t2a t2b ta1 ta2,
+  compatible t1b t1a ->
+  compatible t2a t2b ->
+  ann_compatible ta1 ta2 ->
+  compatible (tann (tfun t1a t2a) ta1) (tann (tfun t1b t2b) ta2)
+| c_sum : forall t1a t1b t2a t2b ta1 ta2,
+  compatible t1a t1b ->
+  compatible t2a t2b ->
+  ann_compatible ta1 ta2 ->
+  compatible (tann (tsum t1a t2a) ta1) (tann (tsum t1b t2b) ta2)
+.
+
 Inductive typing : tenv -> eterm -> type -> Prop :=
 | ty_base : forall te va ta b,
   vtann_compatible2 va ta ->
@@ -468,5 +496,9 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
   typing (extend te j t2) e2 (tann s ta) ->
   join_case_t ta1 ta ta2 -> (*TODO argument order*)
   typing te (ecase e i e1 j e2) (tann s ta2) (*RC-T-CASE*)
-(*| ty_cast : ...*)
+| ty_cast : forall te e t1 t2 p,
+  typing te e t1 ->
+  compatible t1 t2 ->
+  typing te (ecast e t1 t2 p) t2 (*RC-T-CAST*)
 .
+
