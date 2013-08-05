@@ -187,6 +187,17 @@ Proof.
        rewrite EQ35. reflexivity.
 Qed.
 
+Axiom excluded_middle : forall (P : Prop),
+  P \/ ~ P.
+
+Lemma ex_ho_join_v_or_not : forall f va1 va2,
+   (exists va3, (ho_join_v f) va1 va2 va3)
+   \/ (~ exists va3, (ho_join_v f) va1 va2 va3).
+Proof.
+  intros.
+  apply excluded_middle.
+Qed.
+
 (*join functions on value annotations*)
 Definition join_app_v := ho_join_v join_app_stat.
 
@@ -502,3 +513,160 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
   typing te (ecast e t1 t2 p) t2 (*RC-T-CAST*)
 .
 
+
+Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to sure about it*)
+| fc_base : forall n t a a' p,
+  a <> a' ->
+  stuckterm (ecast (dbase n (vd a)) t (tann tbase (taan a')) p)
+| fc_op1 : forall o a0 a1 a2 b1 b2,
+  ~ an_rel o a1 a2 a0 -> 
+  stuckterm (eop o (dbase b1 (vd a1)) (dbase b2 (vd a2)))
+| fc_op2 : forall  o a1 a2 b1 b2 b0,
+  (exists a0, an_rel o a1 a2 a0) ->
+  ~ b_rel o b1 b2 b0 ->
+  stuckterm (eop o (dbase b1 (vs a1)) (dbase b2 (vs a1)))
+| fc_op3 : forall  o a1 a2 b1 b2 b0,
+  (exists a0, an_rel o a1 a2 a0) ->
+  ~ b_rel o b1 b2 b0 ->
+  stuckterm (eop o (dbase b1 (vd a1)) (dbase b2 (vd a1)))
+| fc_guard_base : forall a1 a2 f b,
+  ~(exists va, f (vd a1) (vd a2) va) ->
+  stuckterm (eguard f (vd a1) (dbase b (vd a2)))
+| fc_guard_abstr : forall a1 a2 f i e,
+  ~(exists va, f (vd a1) (vd a2) va) ->
+  stuckterm (eguard f (vd a1) (dabstr i e (vd a2)))
+| fc_guard_lnl : forall a1 a2 f e,
+  ~(exists va, f (vd a1) (vd a2) va) ->
+  stuckterm (eguard f (vd a1) (dlnl e (vd a2)))
+| fc_guard_lnr : forall a1 a2 va f e,
+  ~ f (vd a1) (vd a2) va ->
+  stuckterm (eguard f (vd a1) (dlnr e (vd a2)))
+| fc_appl_left : forall e1 e2,
+  stuckterm e1 ->
+  stuckterm (eappl e1 e2)
+| fc_appl_right : forall e1 e2,
+  stuckterm e2 ->
+  value e1 ->
+  stuckterm (eappl e1 e2)
+| fc_case : forall e e1 e2 i j,
+  stuckterm e ->
+  stuckterm (ecase e i e1 j e2)
+| fc_lnl : forall e va, 
+  stuckterm e ->
+  stuckterm (dlnl e va)
+| fc_lnr : forall e va, 
+  stuckterm e ->
+  stuckterm (dlnr e va)
+.
+
+Lemma progress : forall e t,
+  typing empty e t ->
+  (value e \/ (exists e', smallstep e e') \/ stuckterm e).
+Proof.
+  intros e t H.
+  remember (@empty type) as Gamma.
+  induction H; intros; subst.
+  (*dbase*)
+  left. constructor.
+  (*evar*)
+  inversion H.
+  (*dabstr*)
+  left. constructor.
+  (*eguard*)
+  destruct IHtyping.
+    reflexivity.
+    destruct e; inversion H0; inversion H2; subst.
+    destruct va'. destruct v.
+    (*eguard ... dbase ... *)
+    assert (a0 = a1).
+      inversion H1. reflexivity.
+    assert (a2 = a3).
+      inversion H. inversion H7. reflexivity.
+    subst.
+    right. left.
+    exists (dbase b (vs a)). apply ss_guard_base.
+    apply ho_join_v_static. apply H3.
+    inversion H. inversion H6.
+    destruct v.
+    inversion H.  inversion H1. inversion H1.
+    destruct v.
+    inversion H. inversion H5.
+    destruct va'.
+    destruct H0.
+    inversion H. inversion H5.
+    inversion H1.
+    (* seems to need excluded middle from here...*)
+    assert ((exists va, (ho_join_v f) (vd a0) (vd a) va) 
+            \/ (~ exists va, (ho_join_v f) (vd a0) (vd a) va)).
+      apply ex_ho_join_v_or_not.
+    destruct H3. destruct H3.
+    right. left.
+    exists (dbase b x).
+    apply ss_guard_base. apply H3.
+    unfold not in H3.
+    right. right. 
+    apply fc_guard_base with (a1:=a0) (a2:=a). unfold not. apply H3.
+    (* .... to here*)
+    (*eguard ... dabstr ... *)
+    destruct va'; destruct v.
+    right. left. 
+    exists (dabstr i e (vs a)).
+    apply ss_guard_abstr. apply ho_join_v_static.
+    assert (a1 = a0).
+      inversion H1. reflexivity.
+    assert (a2 = a3).
+      inversion H. inversion H8. reflexivity.
+    subst. apply H3.
+    inversion H. inversion H7.
+    inversion H1.
+    inversion H1.
+    destruct va'; destruct v.
+    inversion H. inversion H6.
+    inversion H1.
+    inversion H. inversion H6.
+    (* needs excluded middle from here...*)
+    assert ((exists va, (ho_join_v f) (vd a) (vd a0) va)
+             \/ (~exists va, (ho_join_v f) (vd a) (vd a0) va)).
+      apply ex_ho_join_v_or_not.
+    destruct H3.
+    right. left. destruct H3.
+    exists (dabstr i e x).
+    apply ss_guard_abstr. apply H3.
+    right. right.
+    apply fc_guard_abstr. apply H3.
+    (*... to here *)
+    (*eguard ... dlnl*)
+    destruct va'; destruct v.
+    assert (a0 = a1).
+      inversion H1. reflexivity.
+    assert (a3 = a2).
+      inversion H. inversion H10. reflexivity.
+    subst.
+    right. left.
+    inversion H0. subst.
+    exists (dlnl e (vs a)).
+    apply ss_guard_dlnl. apply H9.
+    apply ho_join_v_static. apply H8.
+    inversion H. inversion H8.
+    inversion H1.
+    inversion H. inversion H8.
+    destruct va'; destruct v.
+    inversion H. inversion H7.
+    inversion H1.
+    inversion H. inversion H7.
+    (* needs excluded middle from here...*)
+    assert ((exists va, (ho_join_v f) (vd a) (vd a0) va)
+             \/ ( ~ exists va, (ho_join_v f) (vd a) (vd a0) va)).
+      apply ex_ho_join_v_or_not.
+    destruct H3.
+    right. left. destruct H3.
+    exists (dlnl e x).
+    apply ss_guard_dlnl.
+    apply H8.
+    apply H3.
+    right. right.
+    apply fc_guard_lnl. apply H3.
+    (*... to here *)
+    (*eguard ... dlnr *)
+    destruct va'; destruct v.
+    
