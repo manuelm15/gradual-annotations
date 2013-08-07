@@ -61,6 +61,8 @@ Inductive tyann : Set :=
 | tadyn : tyann (* the question mark...*)
 .
 
+(*TODO decide wether join-funtions are defined on argument or not has to go here*)
+
 (*generator for join functions on type annotations*)
 Inductive ho_join_t : (ann -> ann -> ann -> Prop)
    -> tyann -> tyann -> tyann -> Prop :=
@@ -281,18 +283,18 @@ Inductive eterm : Type :=
 with which argument*)
 | dbase : B ->  vann -> eterm (*value of base-type, a constant*)
 | dabstr : id -> eterm -> vann -> eterm (*lambda-expression*)
-| dlnl : eterm -> vann -> eterm (*lnl e va*)
-| dlnr : eterm -> vann -> eterm (*lnr e va*)
+| dinl : eterm -> vann -> eterm (*lnl e va*)
+| dinr : eterm -> vann -> eterm (*lnr e va*)
 .
 
 
 Inductive value : eterm -> Prop :=
 | baseval : forall b va, value (dbase b va)
 | abstrval : forall i va e, value (dabstr i e va)
-| lnlval : forall e va, value e 
-                           -> value (dlnl e va)
-| lnrval : forall e va, value e
-                           -> value (dlnr e va)
+| inlval : forall e va, value e 
+                           -> value (dinl e va)
+| inrval : forall e va, value e
+                           -> value (dinr e va)
 .
 
 (*compability relation of value annotations and type annotations*)
@@ -323,16 +325,16 @@ Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
         (dabstr i 
             (ecast (eappl (dabstr i e va1) (ecast (evar i) t2a t1a (flip p)))
             t1b t2b p) va2) p  (*RC-SG-CAST-FUN*)
-| vc_lnl : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
+| vc_inl : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
   vtann_compatible a va1 ta1 ->
   vtann_compatible a va2 ta2 ->
-  vcast (dlnl e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
-      (dlnl (ecast e t1a t2a p) va2) p
-| vc_lnr : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
+  vcast (dinl e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
+      (dinl (ecast e t1a t2a p) va2) p
+| vc_inr : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
   vtann_compatible a va1 ta1 ->
   vtann_compatible a va2 ta2 ->
-  vcast (dlnr e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
-      (dlnr (ecast e t1b t2b p) va2) p
+  vcast (dinr e va1) (tann (tsum t1a t1b) ta1) (tann (tsum t2a t2b) ta2)
+      (dinr (ecast e t1b t2b p) va2) p
 .
 
 (* substitution function *)
@@ -351,8 +353,8 @@ Fixpoint ssubst (e1 : eterm) (i : id) (e2 : eterm) :=
    | dbase b va => dbase b va
    | dabstr j e' va => if beq_id i j then dabstr j e' va else
                                                 dabstr j (ssubst e' i e2) va
-   | dlnl e' va => dlnl (ssubst e' i e2) va
-   | dlnr e' va  => dlnr (ssubst e' i e2) va
+   | dinl e' va => dinl (ssubst e' i e2) va
+   | dinr e' va  => dinr (ssubst e' i e2) va
    end.
 
 Inductive smallstep : eterm -> eterm -> Prop :=
@@ -360,13 +362,13 @@ Inductive smallstep : eterm -> eterm -> Prop :=
   value e2 ->
   smallstep (eappl (dabstr i e1 va) e2)
             (eguard join_app_v va (ssubst e1 i e2))
-| ss_case_lnl : forall i j e e1 e2 va,
+| ss_case_inl : forall i j e e1 e2 va,
   value e ->
-  smallstep (ecase (dlnl e va) i e1 j e2)
+  smallstep (ecase (dinl e va) i e1 j e2)
             (eguard join_case_v va (ssubst e1 i e))
-| ss_case_lnr : forall i j e e1 e2 va,
+| ss_case_inr : forall i j e e1 e2 va,
   value e ->
-  smallstep (ecase (dlnr e va) i e1 j e2)
+  smallstep (ecase (dinr e va) i e1 j e2)
             (eguard join_case_v va (ssubst e2 j e))
 | ss_guard_base : forall (f:vann -> vann -> vann -> Prop) b va va1 va2,
   f va1 va2 va ->
@@ -376,16 +378,16 @@ Inductive smallstep : eterm -> eterm -> Prop :=
   f va1 va2 va ->
   smallstep (eguard f va1 (dabstr i e va2))
             (dabstr i e va)
-| ss_guard_dlnl : forall (f: vann -> vann -> vann -> Prop) e va va1 va2,
+| ss_guard_dinl : forall (f: vann -> vann -> vann -> Prop) e va va1 va2,
   value e ->
   f va1 va2 va ->
-  smallstep (eguard f va1 (dlnl e va2))
-            (dlnl e va)
-| ss_guard_dlnr : forall (f: vann -> vann -> vann -> Prop) e va va1 va2,
+  smallstep (eguard f va1 (dinl e va2))
+            (dinl e va)
+| ss_guard_dinr : forall (f: vann -> vann -> vann -> Prop) e va va1 va2,
   value e ->
   f va1 va2 va ->
-  smallstep (eguard f va1 (dlnr e va2))
-            (dlnr e va)
+  smallstep (eguard f va1 (dinr e va2))
+            (dinr e va)
 | ss_prim : forall o b1 b2 b va1 va2 va,
   join_op_v o va1 va2 va ->
   b_rel o b1 b2 b ->
@@ -412,12 +414,12 @@ Inductive smallstep : eterm -> eterm -> Prop :=
 | ss_ctx_case : forall i j e1 e2 e e',
   smallstep e e' ->
   smallstep (ecase e i e1 j e2) (ecase e' i e1 j e2)
-| ss_ctx_lnl : forall va e e',
+| ss_ctx_inl : forall va e e',
   smallstep e e' ->
-  smallstep (dlnl e va) (dlnl e' va)
-| ss_ctx_lnr : forall va e e',
+  smallstep (dinl e va) (dinl e' va)
+| ss_ctx_inr : forall va e e',
   smallstep e e' ->
-  smallstep (dlnr e va) (dlnr e' va)
+  smallstep (dinr e va) (dinr e' va)
 | ss_ctx5 : forall e e' t1 t2 p,
   smallstep e e' ->
   smallstep (ecast e t1 t2 p) (ecast e' t1 t2 p).
@@ -428,10 +430,10 @@ Proof.
   unfold not.
   intros.
   induction e; inversion H; subst; inversion H0; inversion H1.
-  (* value dlnl *)
+  (* value dinl *)
   apply IHe. apply H2.
     exists e'. apply H6.
-  (* value dlnr *)
+  (* value dinr *)
   apply IHe. apply H2.
     exists e'. apply H6.
 Qed.
@@ -481,16 +483,16 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
 | ty_guard : forall te e s va' ta ta' ta'' f,
   typing te e (tann s ta'') ->
   ((ho_join_t f) ta' ta'' ta) ->
-  vtann_compatible2 va' ta' -> (*TODO really?*)
+  vtann_compatible2 va' ta' ->
   typing te (eguard (ho_join_v f) va' e) (tann s ta) (*RC-T-GUARD*)
-| ty_lnl : forall va ta te e t1 t2,
+| ty_inl : forall va ta te e t1 t2,
   vtann_compatible2 va ta ->
   typing te e t1 ->
-  typing te (dlnl e va) (tann (tsum t1 t2) ta) (*RC-T-INL*)
-| ty_lnr : forall va ta te e t1 t2,
+  typing te (dinl e va) (tann (tsum t1 t2) ta) (*RC-T-INL*)
+| ty_inr : forall va ta te e t1 t2,
   vtann_compatible2 va ta ->
   typing te e t2 ->
-  typing te (dlnr e va) (tann (tsum t1 t2) ta) (*RC-T-INR*)
+  typing te (dinr e va) (tann (tsum t1 t2) ta) (*RC-T-INR*)
 | ty_op : forall te e1 e2 ta1 ta2 ta o,
   typing te e1 (tann tbase ta1) ->
   typing te e2 (tann tbase ta2) ->
@@ -505,7 +507,7 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
   typing te e (tann (tsum t1 t2) ta1) ->
   typing (extend te i t1) e1 (tann s ta) ->
   typing (extend te j t2) e2 (tann s ta) ->
-  join_case_t ta1 ta ta2 -> (*TODO argument order*)
+  join_case_t ta1 ta ta2 -> 
   typing te (ecase e i e1 j e2) (tann s ta2) (*RC-T-CASE*)
 | ty_cast : forall te e t1 t2 p,
   typing te e t1 ->
@@ -535,12 +537,12 @@ Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to s
 | fc_guard_abstr : forall a1 a2 f i e,
   ~(exists va, f (vd a1) (vd a2) va) ->
   stuckterm (eguard f (vd a1) (dabstr i e (vd a2)))
-| fc_guard_lnl : forall a1 a2 f e,
+| fc_guard_inl : forall a1 a2 f e,
   ~(exists va, f (vd a1) (vd a2) va) ->
-  stuckterm (eguard f (vd a1) (dlnl e (vd a2)))
-| fc_guard_lnr : forall a1 a2 f e,
+  stuckterm (eguard f (vd a1) (dinl e (vd a2)))
+| fc_guard_inr : forall a1 a2 f e,
   ~(exists va, f (vd a1) (vd a2) va) ->
-  stuckterm (eguard f (vd a1) (dlnr e (vd a2)))
+  stuckterm (eguard f (vd a1) (dinr e (vd a2)))
 | fc_guard : forall e f va,
   stuckterm e ->
   stuckterm (eguard f va e)
@@ -561,12 +563,12 @@ Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to s
 | fc_case : forall e e1 e2 i j,
   stuckterm e ->
   stuckterm (ecase e i e1 j e2)
-| fc_lnl : forall e va, 
+| fc_inl : forall e va, 
   stuckterm e ->
-  stuckterm (dlnl e va)
-| fc_lnr : forall e va, 
+  stuckterm (dinl e va)
+| fc_inr : forall e va, 
   stuckterm e ->
-  stuckterm (dlnr e va)
+  stuckterm (dinr e va)
 .
 
   
@@ -664,7 +666,7 @@ Proof.
     apply fc_guard_abstr. apply H3.
     (*... to here *)
 
-    (*eguard ... dlnl*)
+    (*eguard ... dinl*)
     destruct va'; destruct v.
     assert (a0 = a1).
       inversion H1. reflexivity.
@@ -673,8 +675,8 @@ Proof.
     subst.
     right. left.
     inversion H0. subst.
-    exists (dlnl e (vs a)).
-    apply ss_guard_dlnl. apply H9.
+    exists (dinl e (vs a)).
+    apply ss_guard_dinl. apply H9.
 
     apply ho_join_v_static. apply H8.
     inversion H. inversion H8.
@@ -696,17 +698,17 @@ Proof.
       apply ex_ho_join_v_or_not.
     destruct H3.
     right. left. destruct H3.
-    exists (dlnl e x).
-    apply ss_guard_dlnl.
+    exists (dinl e x).
+    apply ss_guard_dinl.
     apply H8.
 
     apply H3.
 
     right. right.
-    apply fc_guard_lnl. apply H3.
+    apply fc_guard_inl. apply H3.
 
     (*... to here *)
-    (*eguard ... dlnr *)
+    (*eguard ... dinr *)
     destruct va'; destruct v.
     assert (a0 = a1).
       inversion H1. reflexivity.
@@ -715,8 +717,8 @@ Proof.
     subst.
     right. left.
     inversion H0. subst.
-    exists (dlnr e (vs a)).
-    apply ss_guard_dlnr. apply H9.
+    exists (dinr e (vs a)).
+    apply ss_guard_dinr. apply H9.
 
     apply ho_join_v_static. apply H8.
 
@@ -740,13 +742,13 @@ Proof.
       apply ex_ho_join_v_or_not.
     destruct H3.
     right. left. destruct H3.
-    exists (dlnr e x).
-    apply ss_guard_dlnr.
+    exists (dinr e x).
+    apply ss_guard_dinr.
     apply H8.
     apply H3.
 
     right. right.
-    apply fc_guard_lnr. apply H3.
+    apply fc_guard_inr. apply H3.
     (*... to here*)
 
     (* eguard join va' e*)
@@ -756,25 +758,25 @@ Proof.
     apply ss_ctx_guard. apply H2.
 
     right. apply fc_guard. apply H2.
-  (*dlnl*)
+  (*dinl*)
   destruct IHtyping.
   reflexivity.
   left. constructor. apply H1.
 
   destruct H1.
   right. left. destruct H1.
-  exists (dlnl x va). constructor. apply H1.
+  exists (dinl x va). constructor. apply H1.
 
   right. right. constructor. apply H1.
 
-  (*dlnr*)
+  (*dinr*)
   destruct IHtyping.
   reflexivity.
   left. constructor. apply H1.
 
   destruct H1.
   right. left. destruct H1.
-  exists (dlnr x va). constructor. apply H1.
+  exists (dinr x va). constructor. apply H1.
 
   right. right. constructor. apply H1.
 
@@ -987,5 +989,3 @@ Proof.
   inversion H.
 
   left.
-
-    
