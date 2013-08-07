@@ -483,11 +483,11 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
   ((ho_join_t f) ta' ta'' ta) ->
   vtann_compatible2 va' ta' -> (*TODO really?*)
   typing te (eguard (ho_join_v f) va' e) (tann s ta) (*RC-T-GUARD*)
-| ty_inl : forall va ta te e t1 t2,
+| ty_lnl : forall va ta te e t1 t2,
   vtann_compatible2 va ta ->
   typing te e t1 ->
   typing te (dlnl e va) (tann (tsum t1 t2) ta) (*RC-T-INL*)
-| ty_inr : forall va ta te e t1 t2,
+| ty_lnr : forall va ta te e t1 t2,
   vtann_compatible2 va ta ->
   typing te e t2 ->
   typing te (dlnr e va) (tann (tsum t1 t2) ta) (*RC-T-INR*)
@@ -568,6 +568,8 @@ Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to s
   stuckterm e ->
   stuckterm (dlnr e va)
 .
+
+  
 
 Lemma progress : forall e t,
   typing empty e t ->
@@ -913,10 +915,77 @@ Proof.
   destruct IHtyping2.
   reflexivity.
 
-  left. exists (eguard (join_app_v 
+  left. exists (eguard join_app_v va (ssubst e i e2)).
+  apply ss_beta. apply H10.
 
-   
+  destruct H10. destruct H10. left.
+  exists (eappl (dabstr i e va) x). apply ss_ctx11.
+  apply H10.
 
-    
+  right. apply fc_appl_right. apply H10.
+  constructor.
+
+  destruct IHtyping2. reflexivity.
+  destruct H9.
+
+  left.
+  exists (eguard join_app_v va (ssubst e i e2)).
+  apply ss_beta. apply H10.
+
+  rewrite <- H5 in H9. inversion H9.
+
+  destruct H9. destruct H9.
+  rewrite <- H5 in H9. inversion H9.
+
+  rewrite <- H5 in H9. inversion H9.
+
+  destruct IHtyping1.
+  reflexivity.
+
+  rewrite <- H6 in H9. inversion H9.
+
+  destruct H9. destruct H9.
+
+  rewrite H6. left. exists (eappl x e2).
+  apply ss_ctx1. apply H9.
+
+  right. rewrite H6. apply (fc_appl_left). apply H9.
+
+  destruct IHtyping1. reflexivity.
+  rewrite <- H6 in H9. inversion H9.
+
+  destruct H9. destruct H9. left. rewrite H6.
+  exists (eappl x e2). apply ss_ctx1. apply H9.
+
+  right. rewrite H6. apply fc_appl_left. apply H9.
+
+  destruct IHtyping1.
+  reflexivity. rewrite <- H7 in H10. inversion H10.
+
+  destruct H10. rewrite H7.  left. destruct H10.
+  exists (eappl x e2). apply ss_ctx1. apply H10.
+
+  right. rewrite H7. apply fc_appl_left. apply H10.
+
+  destruct IHtyping1. reflexivity.
+  rewrite <- H5 in H7. inversion H7.
+
+  destruct H7. left. destruct H7. rewrite <- H6.
+  rewrite H5. exists (eappl x e2). apply ss_ctx1.
+  apply H7.
+
+  right. rewrite <- H6. rewrite H5. apply fc_appl_left.
+  apply H7. 
+
+  (* ecase e i e1 j e2*)
+  right.
+
+  destruct IHtyping1. reflexivity.
+
+  destruct H3. inversion H.
+
+  inversion H.
+
+  left.
 
     
