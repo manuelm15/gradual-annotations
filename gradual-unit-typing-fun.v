@@ -5,6 +5,9 @@ Variable B : Set. (*set of base-type values*)
 Variable op : Set. (*there is some set of operations on base types,
 this will be lifted to the annotation algebra *)
 
+(*equality on operations is decideable*)
+Hypothesis op_eq_dec : forall o1 o2 : op, {o1 = o2} + { o1 <> o2 }.
+
 (*Operations can be applied to base-type values,
   operation application is a function*)
 Variable b_rel : op -> B -> B -> B -> Prop.
@@ -15,13 +18,25 @@ Hypothesis b_rel_function :
     b_rel o b1 b2 b' ->
     b = b'
 .
-(* TODO n-ary operations *)
 
 Inductive ann : Set :=
 | anon : ann
 | acst : id -> ann
 | aprm : op -> ann -> ann -> ann
 . 
+
+Lemma Id_eq_dec : forall x y : id, {x=y} + {x<>y} .
+Proof.
+  decide equality.
+  decide equality.
+Qed.
+
+Lemma ann_eq_dec : forall x y : ann, {x=y} + {x<>y} .
+Proof.
+  decide equality.
+  apply Id_eq_dec.
+  apply op_eq_dec.
+Qed.
 
 (* a relation describing how annotations behave under operations*)
 (* for example, for an annotation a, a + a = a *)
@@ -518,8 +533,20 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
 
 Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to sure about it*)
 | fc_base : forall n t a a' p,
-  a <> a' ->
+  a' <> a ->
   stuckterm (ecast (dbase n (vd a)) t (tann tbase (taan a')) p)
+| fc_abstr : forall a a' t t1 t2 i e p,
+  a' <> a ->
+  stuckterm (ecast (dabstr i e (vd a)) t (tann (tfun t1 t2) (taan a')) p) 
+| fc_inl : forall a a' e t t1 t2 p,
+  a' <> a -> 
+  stuckterm (ecast (dinl e (vd a)) t (tann (tsum t1 t2) (taan a')) p)
+| fc_inr : forall a a' e t t1 t2 p,
+  a' <> a ->
+  stuckterm (ecast (dinr e (vd a)) t (tann (tsum t1 t2) (taan a')) p)
+| fc_cast : forall e t1 t2 p,
+  stuckterm e ->
+  stuckterm (ecast e t1 t2 p)
 | fc_op1 : forall o a1 a2 b1 b2,
   (~ exists a0, an_rel o a1 a2 a0) -> 
   stuckterm (eop o (dbase b1 (vd a1)) (dbase b2 (vd a2)))
@@ -563,15 +590,15 @@ Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to s
 | fc_case : forall e e1 e2 i j,
   stuckterm e ->
   stuckterm (ecase e i e1 j e2)
-| fc_inl : forall e va, 
+| fc_inl_ind : forall e va, 
   stuckterm e ->
   stuckterm (dinl e va)
-| fc_inr : forall e va, 
+| fc_inr_ind : forall e va, 
   stuckterm e ->
   stuckterm (dinr e va)
 .
 
-  
+
 
 Lemma progress : forall e t,
   typing empty e t ->
@@ -981,11 +1008,191 @@ Proof.
 
   (* ecase e i e1 j e2*)
   right.
-
   destruct IHtyping1. reflexivity.
 
-  destruct H3. inversion H.
+  destruct H3.
+  inversion H.
 
   inversion H.
 
-  left.
+  left. exists (eguard join_case_v va (ssubst e1 i e)).
+  apply ss_case_inl. apply H3.
+
+  left. exists (eguard join_case_v va (ssubst e2 j e)).
+  apply ss_case_inr. apply H3.
+
+  destruct H3. left. destruct H3.
+  exists (ecase x i e1 j e2).
+  apply ss_ctx_case. apply H3.
+
+  right. constructor. apply H3.
+
+  (* ecast *)
+  right. destruct IHtyping.
+  reflexivity. destruct H1.
+    (*first: cases where (value e)*)
+    (*ecast dbase *)
+    destruct t1 as [t' tya1]; destruct t2 as [t'' tya2].
+    destruct tya1; destruct tya2.
+    destruct t'; destruct t''; destruct va; inversion H; inversion H3;
+    inversion H0; inversion H10.
+    left. exists (dbase b (vs a0)).
+    apply ss_cast.
+    constructor.
+    apply vc_base with (a := a); rewrite H13; constructor. 
+
+    inversion H0; destruct va; inversion H; inversion H8;
+    try rewrite <- H1 in H; try inversion H.
+    left. exists (dbase b (vd a)).
+    apply ss_cast. constructor.
+    apply vc_base with (a := a); constructor.
+
+    destruct va; inversion H; inversion H3;
+    inversion H0; try rewrite <- H7 in H; try inversion H.
+    pose (ann_eq_dec a a0).
+    destruct s. left.
+    exists (dbase b (vs a)). apply ss_cast.
+    constructor.
+    apply vc_base with (a:=a). rewrite e. constructor. constructor.
+
+    right. apply fc_base. apply n.
+
+    left. destruct va. inversion H. inversion H3.
+    exists (dbase b (vd a)). apply ss_cast. constructor.
+    inversion H. inversion H0; try rewrite <- H7 in H; try inversion H.
+    apply vc_base with (a:=a); constructor.
+
+    (*ecast dabstr*)
+    inversion H. inversion H0. rewrite <- H9 in H. inversion H.
+
+    rewrite <- H11 in H4. inversion H4. inversion H10. 
+    destruct va. subst. inversion H6.
+    left. 
+    exists (dabstr i (ecast (eappl (dabstr i e (vs a)) 
+                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vs a)).
+    apply ss_cast. constructor.
+    apply vc_lam with (a:=a); constructor.
+
+    rewrite <- H13 in H16. rewrite H16 in H6. inversion H6.
+
+    destruct va. rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
+
+    pose (ann_eq_dec a a0). destruct s.
+    left. rewrite <- e1.
+    exists (dabstr i (ecast (eappl (dabstr i e (vd a0))
+                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vs a)).
+    apply ss_cast; try constructor.
+    rewrite <- e1. apply vc_lam with (a:=a); constructor.
+
+    right. apply fc_abstr. apply n.
+
+    destruct va. rewrite H16 in H6. rewrite <- H13 in H6.
+    inversion H6. left.
+    exists (dabstr i (ecast (eappl (dabstr i e (vs a))
+                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vd a)).
+    apply ss_cast. constructor.
+    apply vc_lam with (a:=a); constructor.
+
+    rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
+
+    destruct va. rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
+
+    left.
+    exists (dabstr i (ecast (eappl (dabstr i e (vd a))
+                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vd a)).
+    apply ss_cast. constructor.
+    apply vc_lam with (a:=a); constructor.
+
+    rewrite <- H11 in H4. inversion H4.
+
+    (* ecast dinl*)
+    inversion H0. rewrite <- H3 in H. inversion H.
+
+    rewrite <- H5 in H. inversion H.
+
+    inversion H4. destruct va.
+    left. rewrite <- H7 in H5. rewrite <- H5 in H. inversion H.
+    inversion H13.
+    exists (dinl (ecast e t1a t1b p) (vs a)).
+    apply ss_cast. constructor. apply H1.
+    apply vc_inl with (a:=a); constructor.
+
+    rewrite <- H5 in H. inversion H.
+    rewrite <- H7 in H13. inversion H13.
+
+    destruct va.
+    rewrite <- H5 in H. inversion H.
+    rewrite <- H7 in H13. inversion H13.
+
+    pose (ann_eq_dec a a0). destruct s.
+    left. exists (dinl (ecast e t1a t1b p) (vs a)).
+    apply ss_cast. constructor. apply H1. rewrite e0.
+    apply vc_inl with (a:=a0); constructor.
+
+    right. apply fc_inl. apply n.
+
+    destruct va.
+    left. exists (dinl (ecast e t1a t1b p) (vd a)).
+    apply ss_cast. constructor. apply H1.
+    apply vc_inl with (a:=a).
+    rewrite <- H5 in H. rewrite <- H7 in H. inversion H.
+    inversion H13. constructor.
+    constructor.
+
+    rewrite <- H5 in H. rewrite <- H7 in H. inversion H.
+    inversion H13.
+
+    destruct va.
+    rewrite <- H5 in H. rewrite <- H7 in H. inversion H.
+    inversion H13.
+
+    left. exists (dinl (ecast e t1a t1b p) (vd a)).
+    apply ss_cast. constructor. apply H1.
+    apply vc_inl with (a:=a); constructor.
+
+    (*dinr*)
+    inversion H.
+    rewrite <- H6 in H. inversion H.
+
+    inversion H0; inversion H6.
+
+    rewrite <- H17 in H6. inversion H6.
+
+    rewrite <- H19 in H6. inversion H6.
+
+    destruct va. inversion H12.
+    rewrite <- H21 in H19. inversion H19; rewrite <- H25; rewrite <- H26.
+    rewrite H27 in H18. rewrite <- H22 in H18. inversion H18.
+    left.
+    exists (dinr (ecast e t2a t2b p) (vs a)).
+    apply ss_cast. constructor. apply H1.
+    apply vc_inr with (a:=a); constructor.
+
+    left. exists (dinr (ecast e t2a t2b p) (vd a)).
+    apply ss_cast. constructor. apply H1.
+    apply vc_inr with (a:=a); constructor.
+
+    inversion H12. destruct ta2.
+    pose (ann_eq_dec a0 a). destruct s.
+    rewrite e2. left.
+    exists (dinr (ecast e t3 t2b p) (vs a)).
+    apply ss_cast. constructor. apply H1.
+    apply vc_inr with (a:=a); constructor.
+
+    right. apply fc_inr. apply n.
+
+    left.
+    exists (dinr (ecast e t3 t2b p) (vd a)).
+    apply ss_cast. constructor.
+    apply H1.
+    apply vc_inr with (a:=a); constructor.
+
+    (*then e -> e'*)
+    destruct H1.
+    left. destruct H1. 
+    exists (ecast x t1 t2 p).
+    apply ss_ctx5. apply H1.
+
+    (*then stuckterm e*)
+    right. apply fc_cast. apply H1.
+Qed.
