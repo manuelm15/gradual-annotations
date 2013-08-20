@@ -19,6 +19,11 @@ Hypothesis b_rel_function :
     b = b'
 .
 
+(*It is decideable wether b_rel is defined on two arguments.*)
+Hypothesis decide_op : forall o b1 b2,
+  (exists b, b_rel o b1 b2 b) \/ (~exists b, b_rel o b1 b2 b)
+.
+
 Inductive ann : Set :=
 | anon : ann
 | acst : id -> ann
@@ -38,37 +43,24 @@ Proof.
   apply op_eq_dec.
 Qed.
 
-(* a relation describing how annotations behave under operations*)
-(* for example, for an annotation a, a + a = a *)
-Variable an_rel : op -> ann -> ann -> ann -> Prop.
+(*parameter for the function*)
+Inductive join_param :=
+ | case (*join_case*)
+ | appl (*join_appl*)
+ | jop : op -> join_param
+.
 
-(* an_rel should be a function
- (only one resulting annotation if a opperation is applied to two annoatations)
-*)
-Hypothesis an_rel_function : 
- forall o a1 a2 a a', an_rel o a1 a2 a ->
-                      an_rel o a1 a2 a' ->
-                      a = a'.
-(* Note that an_rel in general might be a partial function*)
+(*join function on annotations*)
+Variable join : join_param -> ann -> ann -> ann -> Prop.
 
-(*join function for function application, somewhat
- similar to join function on operations...*)
-Variable join_app_stat : ann -> ann -> ann -> Prop.
+(*join is a function *)
+Hypothesis join_function : forall o a1 a2 a a',
+  join o a1 a2 a /\ join o a1 a2 a'
+  -> a = a'.
 
-Hypothesis join_app_stat_function :
-   forall a1 a2 a a',
-         join_app_stat a1 a2 a ->
-         join_app_stat a1 a2 a' ->
-         a = a'.
-
-(*join function for case application*)
-Variable join_case_stat : ann -> ann -> ann -> Prop.
-
-Hypothesis join_case_stat_function :
-   forall a1 a2 a a',
-         join_case_stat a1 a2 a ->
-         join_case_stat a1 a2 a' ->
-         a = a'.
+(* it is decideable wether join is defined on arguments or not*)
+Hypothesis decide_join : forall o a1 a2,
+  (exists a, join o a1 a2 a) \/ (~ exists a, join o a1 a2 a).
 
 (*Set of type annotations*)
 Inductive tyann : Set :=
@@ -76,85 +68,6 @@ Inductive tyann : Set :=
 | tadyn : tyann (* the question mark...*)
 .
 
-(*TODO decide wether join-funtions are defined on argument or not has to go here*)
-
-(*generator for join functions on type annotations*)
-Inductive ho_join_t : (ann -> ann -> ann -> Prop)
-   -> tyann -> tyann -> tyann -> Prop :=
-   | ho_join_t_static : 
-       forall (f: (ann -> ann -> ann -> Prop)) a1 a2 a, 
-       f a1 a2 a -> ho_join_t f (taan a1) (taan a2) (taan a)
-   | ho_join_t_dynamic : forall f, ho_join_t f tadyn tadyn tadyn.
-
-(*if ho_join is applied to a function, the result is a function*)
-Lemma ho_join_t_keep_fun : forall (f: ann -> ann -> ann -> Prop) 
-    ta1 ta2 ta ta',
-   (forall a1 a2 a a', f a1 a2 a -> f a1 a2 a' -> a = a') ->
-   (((ho_join_t f) ta1 ta2 ta) -> ((ho_join_t f) ta1 ta2 ta')
-    -> ta = ta').
-Proof.
-  intros f ta1 ta2 ta ta' f_fun.
-  intros H0 H1.
-  inversion H0.
-    inversion H1.
-      assert (a1 = a0).
-        rewrite <- H8 in H3.
-        inversion H3. reflexivity.
-      assert (a3 = a2).
-        rewrite <- H9 in H4.
-        inversion H4. reflexivity.
-      assert (a = a4).
-        rewrite <- H11 in H6.
-        rewrite H12 in H6.
-        apply f_fun with (a:=a) (a':=a4) (a1:=a1) (a2:=a2).
-        apply H.
-        apply H6.
-      rewrite H13. reflexivity.
-      rewrite <- H3 in H7. inversion H7.
-    inversion H1.
-      rewrite <- H7 in H2. inversion H2.
-      reflexivity.
-Qed.
-
-Definition join_app_t := ho_join_t join_app_stat.
-
-Theorem join_app_t_function : forall ta1 ta2 ta ta',
-          join_app_t ta1 ta2 ta ->
-          join_app_t ta1 ta2 ta' ->
-          ta = ta'.
-Proof.
-  intros ta1 ta2 ta ta'.
-  apply ho_join_t_keep_fun.
-  apply join_app_stat_function.
-Qed.
-
-Definition join_case_t := ho_join_t join_case_stat.
-
-Theorem join_case_t_function : forall ta1 ta2 ta ta',
-          join_case_t ta1 ta2 ta ->
-          join_case_t ta1 ta2 ta' ->
-          ta = ta'.
-Proof.
-  intros ta1 ta2 ta ta'.
-  apply ho_join_t_keep_fun.
-  apply join_case_stat_function.
-Qed.
-
-Definition join_op_t (o:op) : tyann -> tyann -> tyann -> Prop :=
-   ho_join_t (an_rel o).
-
-     
-Theorem join_op_t_function : forall o ta1 ta2 ta ta',
-          join_op_t o ta1 ta2 ta ->
-          join_op_t o ta1 ta2 ta' ->
-          ta = ta'.
-Proof.
-  intros.
-  apply ho_join_t_keep_fun with (f:=(an_rel o)) (ta1:=ta1) (ta2:=ta2).
-  apply an_rel_function.
-  apply H.
-  apply H0.
-Qed.
 
 (*set of value annotations*)
 Inductive vann : Set := 
@@ -162,109 +75,24 @@ Inductive vann : Set :=
 | vd : ann -> vann  (*dynamic value annotation*)
 .
 
-(*generator for join functions on value annotations*)
-Inductive ho_join_v : (ann -> ann -> ann -> Prop)
-                     -> (vann -> vann -> vann -> Prop) :=
-| ho_join_v_static : forall (f: ann -> ann -> ann -> Prop) a1 a2 a3,
-      f a1 a2 a3 -> ho_join_v f (vs a1) (vs a2) (vs a3)
-| ho_join_v_dyn : forall (f: ann -> ann -> ann -> Prop) a1 a2 a3,
-      f a1 a2 a3 -> ho_join_v f (vd a1) (vd a2) (vd a3)
+(* join function on value annotations *)
+Inductive join_v : join_param -> vann -> vann -> vann -> Prop :=
+| join_v_static : forall o a1 a2 a,
+                   join o a1 a2 a -> 
+                   join_v o (vs a1) (vs a2) (vs a)
+| join_v_dyn : forall o a1 a2 a,
+                   join o a1 a2 a ->
+                   join_v o (vd a1) (vd a2) (vd a)
 .
 
-(*everything generated from a function with ho_join_v is a function*)
-Lemma ho_join_v_keep_fun : forall (f : ann -> ann -> ann -> Prop)
-          va1 va2 va va',
-          (forall a1 a2 a a', f a1 a2 a -> f a1 a2 a' -> a = a')
-       -> (ho_join_v f) va1 va2 va
-       -> (ho_join_v f) va1 va2 va'
-       -> (va = va').
-Proof.
-  intros f va1 va2 va va' f_fun.
-  intros.
-  inversion H.
-    inversion H0.
-      assert (a1 = a0) as EQ10.
-        rewrite <- H3 in H8. inversion H8. reflexivity.
-      assert (a4 = a2) as EQ42.
-        rewrite <- H4 in H9. inversion H9. reflexivity.
-      assert (a3 = a5) as EQ35.
-        apply f_fun with (a1:=a1) (a2:=a2).
-        apply H1. rewrite EQ10. rewrite <- EQ42. apply H6.
-      rewrite EQ35. reflexivity.
-      rewrite <- H3 in H8. inversion H8.
-    inversion H0.
-      rewrite <- H3 in H8. inversion H8.
-      assert (a1 = a0) as EQ10.
-        rewrite <- H3 in H8. inversion H8. reflexivity.
-      assert (a4 = a2) as EQ42.
-        rewrite <- H4 in H9. inversion H9. reflexivity.
-      assert (a3 = a5) as EQ35.
-       apply f_fun with (a1:=a1) (a2:=a2).
-       apply H1. rewrite EQ10. rewrite <- EQ42. apply H6.
-       rewrite EQ35. reflexivity.
-Qed.
-
-Axiom excluded_middle : forall (P : Prop),
-  P \/ ~ P.
-
-Lemma ex_ho_join_v_or_not : forall f va1 va2,
-   (exists va3, (ho_join_v f) va1 va2 va3)
-   \/ (~ exists va3, (ho_join_v f) va1 va2 va3).
-Proof.
-  intros.
-  apply excluded_middle.
-Qed.
-
-(*join functions on value annotations*)
-Definition join_app_v := ho_join_v join_app_stat.
-
-Theorem join_app_v_function : forall va1 va2 va va',
-     join_app_v va1 va2 va ->
-     join_app_v va1 va2 va' ->
-     va = va'.
-Proof.
-  intros. 
-  apply ho_join_v_keep_fun with (f:= join_app_stat)
-                                (va1 := va1)
-                                (va2 := va2).
-  apply join_app_stat_function.
-  apply H.
-  apply H0.
-Qed.
-
-Definition join_case_v := ho_join_v join_case_stat.
-
-Theorem join_case_v_function : forall va1 va2 va va', 
-     join_case_v va1 va2 va ->
-     join_case_v va1 va2 va' ->
-     va = va'.
-Proof.
-  intros.
-  apply ho_join_v_keep_fun with (f:= join_case_stat)
-                                (va1 := va1)
-                                (va2 := va2).
-  apply join_case_stat_function.
-  apply H.
-  apply H0.
-Qed.
-
-Definition join_op_v (o:op) : vann -> vann -> vann -> Prop :=
-     ho_join_v (an_rel o).
-
-Theorem join_op_v_function : forall o va1 va2 va va',
-     join_op_v o va1 va2 va ->
-     join_op_v o va1 va2 va' ->
-     va = va'.
-Proof.
-  intros.
-  apply ho_join_v_keep_fun with (f := (an_rel o))
-                                (va1 := va1)
-                                (va2 := va2).
-  apply an_rel_function.
-  apply H.
-  apply H0.
-Qed.
-
+(* join function on type annotations *)
+Inductive join_t : join_param -> tyann -> tyann -> tyann -> Prop :=
+| join_t_dyn : forall o,
+                  join_t o tadyn tadyn tadyn
+| join_t_static : forall o a1 a2 a,
+                  join o a1 a2 a ->
+                  join_t o (taan a1) (taan a2) (taan a)
+.
 
 Inductive type : Set :=
 | tann : stype -> tyann -> type
@@ -376,15 +204,15 @@ Inductive smallstep : eterm -> eterm -> Prop :=
 | ss_beta : forall i e1 e2 va,
   value e2 ->
   smallstep (eappl (dabstr i e1 va) e2)
-            (eguard join_app_v va (ssubst e1 i e2))
+            (eguard (join_v appl) va (ssubst e1 i e2))
 | ss_case_inl : forall i j e e1 e2 va,
   value e ->
   smallstep (ecase (dinl e va) i e1 j e2)
-            (eguard join_case_v va (ssubst e1 i e))
+            (eguard (join_v case) va (ssubst e1 i e))
 | ss_case_inr : forall i j e e1 e2 va,
   value e ->
   smallstep (ecase (dinr e va) i e1 j e2)
-            (eguard join_case_v va (ssubst e2 j e))
+            (eguard (join_v case) va (ssubst e2 j e))
 | ss_guard_base : forall (f:vann -> vann -> vann -> Prop) b va va1 va2,
   f va1 va2 va ->
   smallstep (eguard f va1 (dbase b va2))
@@ -404,7 +232,7 @@ Inductive smallstep : eterm -> eterm -> Prop :=
   smallstep (eguard f va1 (dinr e va2))
             (dinr e va)
 | ss_prim : forall o b1 b2 b va1 va2 va,
-  join_op_v o va1 va2 va ->
+   join_v (jop o) va1 va2 va ->
   b_rel o b1 b2 b ->
   smallstep (eop o (dbase b1 va1) (dbase b2 va2)) (dbase b va)
 | ss_cast : forall e t1 t2 v p,
@@ -495,11 +323,11 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
   vtann_compatible2 va ta ->
   typing (extend te i t') e t ->
   typing te (dabstr i e va) (tann (tfun t' t) ta) (*RC-T-ABS*)
-| ty_guard : forall te e s va' ta ta' ta'' f,
+| ty_guard : forall te e s va' ta ta' ta'' p,
   typing te e (tann s ta'') ->
-  ((ho_join_t f) ta' ta'' ta) ->
+  ((join_t p) ta' ta'' ta) ->
   vtann_compatible2 va' ta' ->
-  typing te (eguard (ho_join_v f) va' e) (tann s ta) (*RC-T-GUARD*)
+  typing te (eguard (join_v p) va' e) (tann s ta) (*RC-T-GUARD*)
 | ty_inl : forall va ta te e t1 t2,
   vtann_compatible2 va ta ->
   typing te e t1 ->
@@ -511,18 +339,18 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
 | ty_op : forall te e1 e2 ta1 ta2 ta o,
   typing te e1 (tann tbase ta1) ->
   typing te e2 (tann tbase ta2) ->
-  join_op_t o ta1 ta2 ta ->
+  join_t (jop o) ta1 ta2 ta ->
   typing te (eop o e1 e2) (tann tbase ta) (*RC-T-OP*)
 | ty_app : forall te e1 e2 s t2 ta ta1 ta2,
   typing te e1 (tann (tfun t2 (tann s ta1)) ta) ->
   typing te e2 t2 ->
-  join_app_t ta ta1 ta2 ->
+  join_t appl ta ta1 ta2 ->
   typing te (eappl e1 e2) (tann s ta2) (*RC-T-APP*)
 | ty_case : forall te e e1 e2 i j t1 t2 s ta ta1 ta2,
   typing te e (tann (tsum t1 t2) ta1) ->
   typing (extend te i t1) e1 (tann s ta) ->
   typing (extend te j t2) e2 (tann s ta) ->
-  join_case_t ta1 ta ta2 -> 
+  join_t case ta1 ta ta2 -> 
   typing te (ecase e i e1 j e2) (tann s ta2) (*RC-T-CASE*)
 | ty_cast : forall te e t1 t2 p,
   typing te e t1 ->
@@ -548,14 +376,14 @@ Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to s
   stuckterm e ->
   stuckterm (ecast e t1 t2 p)
 | fc_op1 : forall o a1 a2 b1 b2,
-  (~ exists a0, an_rel o a1 a2 a0) -> 
+  (~ exists a0, join (jop o) a1 a2 a0) -> 
   stuckterm (eop o (dbase b1 (vd a1)) (dbase b2 (vd a2)))
 | fc_op2 : forall  o a1 a2 b1 b2,
-  (exists a0, an_rel o a1 a2 a0) ->
+  (exists a0, join (jop o) a1 a2 a0) ->
   (~ exists b0, b_rel o b1 b2 b0 )->
   stuckterm (eop o (dbase b1 (vs a1)) (dbase b2 (vs a2)))
 | fc_op3 : forall  o a1 a2 b1 b2,
-  (exists a0, an_rel o a1 a2 a0) ->
+  (exists a0, join (jop o) a1 a2 a0) ->
   (~ exists b0, b_rel o b1 b2 b0 )->
   stuckterm (eop o (dbase b1 (vd a1)) (dbase b2 (vd a2)))
 | fc_guard_base : forall a1 a2 f b,
@@ -621,170 +449,149 @@ Proof.
     destruct e; inversion H0; inversion H2; subst.
     destruct va'. destruct v.
     (*eguard ... dbase ... *)
-    assert (a0 = a1).
-      inversion H1. reflexivity.
-    assert (a2 = a3).
-      inversion H. inversion H7. reflexivity.
-    subst.
-    right. left.
-    exists (dbase b (vs a)). apply ss_guard_base.
-    apply ho_join_v_static. apply H3.
+    inversion H. inversion H5.
+
+    inversion H1.
+
+    destruct v.
+    inversion H. inversion H5.
+
+    right.
+    pose (decide_join p a a0).
+    destruct o. destruct H3.
+    left. exists (dbase b (vd x)).
+    constructor. constructor. apply H3.
+
+    right. constructor.
+    unfold not. unfold not in H3. intros.
+    apply H3. inversion H4.
+    inversion H5. exists a3.
+    apply H9.
+
+    right. destruct v.
+    inversion H1. left.
+    inversion H. inversion H8. subst.
+    exists (dbase b (vs a)). constructor. constructor.
+    inversion H0. subst. apply H9.
 
     inversion H. inversion H6.
-    destruct v.
-    inversion H.  
-    inversion H1.
-
-    inversion H1.
-
-    destruct v.
-    inversion H. inversion H5.
-    destruct va'.
-    destruct H0.
-    inversion H. inversion H5.
-
-    inversion H1.
-
-    (* seems to need excluded middle from here...*)
-    assert ((exists va, (ho_join_v f) (vd a0) (vd a) va) 
-            \/ (~ exists va, (ho_join_v f) (vd a0) (vd a) va)).
-      apply ex_ho_join_v_or_not.
-    destruct H3. destruct H3.
-    right. left.
-    exists (dbase b x).
-    apply ss_guard_base. apply H3.
-    unfold not in H3.
-    right. right. 
-    apply fc_guard_base with (a1:=a0) (a2:=a). unfold not. apply H3.
-    (* .... to here*)
 
     (*eguard ... dabstr ... *)
     destruct va'; destruct v.
-    right. left. 
+    inversion H. inversion H6.
+
+    inversion H1.
+
+    inversion H. inversion H6.
+
+    right.
+    pose (decide_join p a a0).
+    destruct o.  destruct H3.
+    left.
+    exists (dabstr i e (vd x)). constructor. constructor.
+    apply H3.
+
+    right. constructor.
+    unfold not. unfold not in H3.
+    intros. apply H3.
+    inversion H4. inversion H5.
+    subst. exists a3. apply H9.
+
+    destruct va'; destruct v.
+
+    right. left.
     exists (dabstr i e (vs a)).
-    apply ss_guard_abstr. apply ho_join_v_static.
-    assert (a1 = a0).
-      inversion H1. reflexivity.
-    assert (a2 = a3).
-      inversion H. inversion H8. reflexivity.
+    constructor. constructor.
+    inversion H1. inversion H. inversion H9.
     subst. apply H3.
 
     inversion H. inversion H7.
-    inversion H1.
-
-    inversion H1.
-    destruct va'; destruct v.
-    inversion H. inversion H6.
 
     inversion H1.
 
-    inversion H. inversion H6.
-
-    (* needs excluded middle from here...*)
-    assert ((exists va, (ho_join_v f) (vd a) (vd a0) va)
-             \/ (~exists va, (ho_join_v f) (vd a) (vd a0) va)).
-      apply ex_ho_join_v_or_not.
-    destruct H3.
-    right. left. destruct H3.
-    exists (dabstr i e x).
-    apply ss_guard_abstr. apply H3.
-
-    right. right.
-    apply fc_guard_abstr. apply H3.
-    (*... to here *)
+    inversion H1.    
 
     (*eguard ... dinl*)
     destruct va'; destruct v.
-    assert (a0 = a1).
-      inversion H1. reflexivity.
-    assert (a3 = a2).
-      inversion H. inversion H10. reflexivity.
-    subst.
+
+    inversion H. inversion H1.
+
+    inversion H1.
+
+    inversion H. inversion H7.
+
+    pose (decide_join p a a0).
+    destruct o. destruct H3.
     right. left.
-    inversion H0. subst.
-    exists (dinl e (vs a)).
-    apply ss_guard_dinl. apply H9.
-
-    apply ho_join_v_static. apply H8.
-    inversion H. inversion H8.
-
-    inversion H1.
-
-    inversion H. inversion H8.
-
-    destruct va'; destruct v.
-    inversion H. inversion H7.
-
-    inversion H1.
-
-    inversion H. inversion H7.
-
-    (* needs excluded middle from here...*)
-    assert ((exists va, (ho_join_v f) (vd a) (vd a0) va)
-             \/ ( ~ exists va, (ho_join_v f) (vd a) (vd a0) va)).
-      apply ex_ho_join_v_or_not.
-    destruct H3.
-    right. left. destruct H3.
-    exists (dinl e x).
-    apply ss_guard_dinl.
-    apply H8.
-
-    apply H3.
+    exists (dinl e (vd x)).
+    constructor. apply H8.
+    constructor. apply H3.
 
     right. right.
-    apply fc_guard_inl. apply H3.
+    constructor.
+    unfold not. unfold not in H3.
+    intros. apply H3.
+    inversion H4. inversion H5.
+    exists a3. apply H10.
 
-    (*... to here *)
+    destruct va'; destruct v.
+    inversion H1.
+    inversion H. inversion H11.
+    inversion H0. subst.
+    right. left.
+    exists (dinl e (vs a)). constructor.
+    apply H9. constructor. apply H20.  
+
+    inversion H. inversion H8.
+
+    inversion H1.
+
+    inversion H1.
     (*eguard ... dinr *)
     destruct va'; destruct v.
-    assert (a0 = a1).
-      inversion H1. reflexivity.
-    assert (a3 = a2).
-      inversion H. inversion H10. reflexivity.
-    subst.
-    right. left.
-    inversion H0. subst.
-    exists (dinr e (vs a)).
-    apply ss_guard_dinr. apply H9.
 
-    apply ho_join_v_static. apply H8.
-
-    inversion H. inversion H8.
+    inversion H. inversion H1.
 
     inversion H1.
 
-    inversion H. inversion H8.
+    inversion H. inversion H7.
+
+    pose (decide_join p a a0).
+    destruct o. destruct H3.
+    right. left.
+    exists (dinr e (vd x)).
+    constructor. apply H8.
+    constructor. apply H3.
+
+    right. right.
+    constructor.
+    unfold not. unfold not in H3.
+    intros. apply H3.
+    inversion H4. inversion H5.
+    exists a3. apply H10.
 
     destruct va'; destruct v.
     inversion H1.
+    inversion H. inversion H11.
+    inversion H0. subst.
+    right. left.
+    exists (dinr e (vs a)). constructor.
+    apply H9. constructor. apply H20.  
 
-    inversion H. inversion H7.
+    inversion H. inversion H8.
+
     inversion H1.
 
-    inversion H. inversion H7.
+    inversion H1.
 
-    (* needs excluded middle from here...*)
-    assert ((exists va, (ho_join_v f) (vd a) (vd a0) va)
-            \/ (~ exists va, (ho_join_v f) (vd a) (vd a0) va)).
-      apply ex_ho_join_v_or_not.
-    destruct H3.
-    right. left. destruct H3.
-    exists (dinr e x).
-    apply ss_guard_dinr.
-    apply H8.
-    apply H3.
+    destruct H2.
+    (*eguard ... e and e -> e'*)
+    destruct H2 as [e'].
+    right. left. exists (eguard (join_v p) va' e').
+    constructor. apply H2.
 
-    right. right.
-    apply fc_guard_inr. apply H3.
-    (*... to here*)
-
-    (* eguard join va' e*)
-    right. destruct H2.
-    left. destruct H2.
-    exists (eguard (ho_join_v f) va' x).
-    apply ss_ctx_guard. apply H2.
-
-    right. apply fc_guard. apply H2.
+    (*eguard ... e and stuckterm e*)
+    right. right. constructor. apply H2.
   (*dinl*)
   destruct IHtyping.
   reflexivity.
@@ -816,61 +623,35 @@ Proof.
     inversion H. rewrite <- H4 in H8. inversion H8.
     inversion H0. rewrite <- H5 in H14. inversion H14.
     inversion H1.
-    inversion H9. rewrite <- H24 in H20. inversion H20.
-                                         rewrite <- H12. rewrite <- H23.
-                                         rewrite <- H26.
-    inversion H15.
-    (*case needs excluded middle from here..*)
-    rewrite <- H27 in H21. inversion H21. rewrite <- H18. rewrite <- H25.
-                                          rewrite <- H29. 
-    assert ((exists b1, b_rel o b b0 b1) \/ ~(exists b1, b_rel o b b0 b1)).
-      apply excluded_middle.
-    destruct H28. destruct H28.
-    left. exists (dbase x (vs a)). constructor.
-    constructor. apply H16.
-    apply H28.
-
-    right. apply fc_op2.
-    exists a. apply H16.
-    apply H28.
-    (*to here*)
-
-    rewrite <- H22 in H1. rewrite <- H24 in H1. rewrite <- H27 in H1.
-    inversion H1.
-
-    rewrite <- H24 in H20. inversion H20.
-
+    inversion H9. rewrite <- H22 in H9. rewrite <- H19 in H9.
     inversion H9.
-    rewrite <- H23 in H19. inversion H19.
 
-    inversion H15.
-    rewrite <- H25 in H20. inversion H20.
+    rewrite <- H22 in H12. rewrite <- H12.
+    rewrite <- H5 in H0. rewrite <- H20 in H0.
+    inversion H0. inversion H26.
 
-    rewrite <- H12. rewrite <- H18.
-    rewrite <- H22. rewrite <- H24.
+    pose (decide_join (jop o) ann0 ann1).
+    pose (decide_op o b b0).
+    destruct o1. destruct H30 as [a].
+    destruct o2. destruct H31 as [b'].
+    left. exists (dbase b' (vd a)).
+    constructor. constructor. apply H30. apply H31.
 
-    (*case needs excluded middle from here...*)
-    assert ((exists a, join_op_v o (vd ann0) (vd ann1) a) \/
-             (~exists a, join_op_v o (vd ann0) (vd ann1) a)).
-       apply excluded_middle.
-    assert ((exists b1, b_rel o b b0 b1) \/
-            (~exists b1, b_rel o b b0 b1)).
-       apply excluded_middle.
-    destruct H26. destruct H26.
-    destruct H27. destruct H27.
-    left.
-    exists (dbase x0 x). constructor.
-    apply H26. apply H27.
+    right. apply fc_op3. exists a. apply H30.
+    apply H31.
 
-    right. apply fc_op3. inversion H26. exists a3. apply H31.
-    apply H27.
+    right. apply fc_op1. apply H30.
 
-    right. apply fc_op1 with (a1:=ann0) (a2:=ann1).
-    unfold not. intros. unfold not in H26.
-    apply H26. destruct H28.
-    exists (vd x). constructor. apply H28.
-    (*... to here*)
-    
+    subst. inversion H15. inversion H9.
+    subst.
+    pose (decide_op o b b0).
+    destruct o0. destruct H4 as [b'].
+    left. exists (dbase b' (vs a)).
+    constructor. constructor. apply H16. apply H4.
+
+    right. apply fc_op2. exists a. apply H16.
+    apply H4.
+
     (* inconsistent cases generated by inverting assumptions of form value e*)
     rewrite <- H14 in H5. inversion H5.
 
@@ -944,7 +725,7 @@ Proof.
   destruct IHtyping2.
   reflexivity.
 
-  left. exists (eguard join_app_v va (ssubst e i e2)).
+  left. exists (eguard (join_v appl) va (ssubst e i e2)).
   apply ss_beta. apply H10.
 
   destruct H10. destruct H10. left.
@@ -958,7 +739,7 @@ Proof.
   destruct H9.
 
   left.
-  exists (eguard join_app_v va (ssubst e i e2)).
+  exists (eguard (join_v appl) va (ssubst e i e2)).
   apply ss_beta. apply H10.
 
   rewrite <- H5 in H9. inversion H9.
@@ -1015,10 +796,10 @@ Proof.
 
   inversion H.
 
-  left. exists (eguard join_case_v va (ssubst e1 i e)).
+  left. exists (eguard (join_v case) va (ssubst e1 i e)).
   apply ss_case_inl. apply H3.
 
-  left. exists (eguard join_case_v va (ssubst e2 j e)).
+  left. exists (eguard (join_v case) va (ssubst e2 j e)).
   apply ss_case_inr. apply H3.
 
   destruct H3. left. destruct H3.
@@ -1196,3 +977,10 @@ Proof.
     (*then stuckterm e*)
     right. apply fc_cast. apply H1.
 Qed.
+
+      
+        
+          
+       
+
+   
