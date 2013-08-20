@@ -978,9 +978,47 @@ Proof.
     right. apply fc_cast. apply H1.
 Qed.
 
-      
-        
-          
-       
-
-   
+Inductive occurs_free (i : id) :  eterm -> Prop :=
+| of_var : 
+  occurs_free i (evar i)
+| of_app1 : forall e1 e2,
+  occurs_free i e1 ->
+  occurs_free i (eappl e1 e2)
+| of_app2 : forall e1 e2,
+  occurs_free i e2 ->
+  occurs_free i (eappl e1 e2)
+| of_base1 : forall e1 e2 o,
+  occurs_free i e1 ->
+  occurs_free i (eop o e1 e2)
+| of_base2 : forall e1 e2 o,
+  occurs_free i e2 ->
+  occurs_free i (eop o e1 e2)
+| of_lam : forall i' e va,
+  occurs_free i e ->
+  i <> i' ->
+  occurs_free i (dabstr i' e va)
+| of_inl : forall e va,
+  occurs_free i e ->
+  occurs_free i (dinl e va)
+| of_inr : forall e va,
+  occurs_free i e ->
+  occurs_free i (dinr e va)
+| of_case1 : forall j k e e1 e2,
+  occurs_free i e ->
+  occurs_free i (ecase e j e1 k e2)
+| of_case2 : forall j k e e1 e2,
+  occurs_free i e1 ->
+  i <> j ->
+  occurs_free i (ecase e j e1 k e2)
+| of_case3 : forall j k e e1 e2,
+  occurs_free i e2 ->
+  i <> k ->
+  occurs_free i (ecase e j e1 k e2)
+| of_guard : forall f va e,
+  occurs_free i e ->
+  occurs_free i (eguard f va e)
+| of_cast : forall e t1 t2 p,
+  occurs_free i e ->
+  occurs_free i (ecast e t1 t2 p)
+.
+ 
