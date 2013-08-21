@@ -1025,6 +1025,9 @@ Inductive occurs_free (i : id) :  eterm -> Prop :=
 
 Hint Constructors occurs_free.
 
+Definition closed (e:eterm) := 
+  forall x, ~ occurs_free x e.
+
 Inductive non_binding_context (e:eterm) : eterm -> Prop :=
 | nb_app_left : forall e2,
   non_binding_context e (eappl e e2)
@@ -1165,6 +1168,42 @@ Proof.
   apply e0.
   constructor. apply H1.
   apply H.
+Qed.
+
+Lemma free_in_context : forall te x e t,
+  occurs_free x e ->
+  typing te e t ->
+  exists t', te x = Some t'.
+Proof.
+  intros te x e t Free Typing.
+  generalize dependent te.
+  generalize dependent t.
+  induction Free; intros t te Typing; inversion Typing; subst.
+  symmetry in H1.
+  exists t. assumption.
+  apply IHFree with (t:=(tann (tfun t2 (tann s ta1)) ta)).
+  apply H1.
+  apply IHFree with (t:=t2).
+  apply H3.
+  apply IHFree with (t:=tann tbase ta1).
+  apply H3.
+  apply IHFree with (t:=tann tbase ta2).
+  apply H5.
+  apply IHFree in H6. 
+  apply not_eq_beq_id_false in H. rewrite extend_neq in H6.
+  apply H6. rewrite beq_id_sym. apply H.
+  apply IHFree with (t:=t1). apply H4.
+  apply IHFree with (t:=t2). apply H4.
+  apply IHFree with (t:=(tann (tsum t1 t2) ta1)).
+  apply H6.
+  apply IHFree in H8.
+  apply not_eq_beq_id_false in H. rewrite extend_neq in H8.
+  apply H8. rewrite beq_id_sym. apply H.
+  apply IHFree in H9.
+  apply not_eq_beq_id_false in H. rewrite extend_neq in H9.
+  apply H9. rewrite beq_id_sym. apply H.
+  apply IHFree with (t:=tann s ta''). apply H3.
+  apply IHFree with (t:=t1). apply H5.
 Qed.
 
 
