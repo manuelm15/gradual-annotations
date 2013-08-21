@@ -1318,6 +1318,101 @@ Proof.
   reflexivity.
 Qed.
 
+(* if two typing environments are similar at all places and receive the same extension,
+  the extended environments are similar in all places*)
+Lemma identical_extend_identical : forall te te' i (t:type),
+  (forall x, te x = te' x) ->
+  (forall x, (extend te i t) x = (extend te' i t) x).
+Proof.
+  intros.
+  unfold extend.  
+  remember (beq_id i x) as beq_id_i_x.
+  destruct beq_id_i_x.
+  reflexivity. 
+  apply H.
+Qed.
+
+(*typing does not change if environment stays the same for all variables*)
+Lemma exchangeable_context : forall te te' e t,
+  (forall x, te x = te' x) ->
+  typing te e t ->
+  typing te' e t.
+Proof.
+  intros te te' e.
+  generalize dependent te.
+  generalize dependent te'.
+  induction e; intros; inversion H0.
+  (* evar *)
+  constructor.
+  rewrite H3.
+  apply H.
+  (* eop *)
+  apply ty_op with (ta1:=ta1) (ta2:=ta2).
+  apply IHe1 with (te:=te).
+  apply H.
+  apply H5.
+  apply IHe2 with (te:=te).
+  apply H.
+  apply H7.
+  apply H8.
+  (* eappl *)
+  apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1). 
+  apply IHe1 with (te:=te).
+  apply H.
+  apply H3.
+  apply IHe2 with (te:=te).
+  apply H.
+  apply H5.
+  apply H7.
+  (* ecase *)
+  apply ty_case with (t1:=t1) (t2:=t2) (ta:=ta) (ta1:=ta1).  apply IHe1 with (te:=te).
+  apply H.
+  apply H8.
+  apply IHe2 with (te:= (extend te i t1)).
+  apply identical_extend_identical.
+  apply H.
+  apply H9.
+  apply IHe3 with (te:= (extend te i0 t2)).
+  apply identical_extend_identical.
+  apply H.
+  apply H10.
+  apply H11.
+  (* ecast *)
+  constructor.
+  apply IHe with (te:=te).
+  apply H.
+  apply H7. apply H8.
+  (* eguard *)
+  apply ty_guard with (ta':=ta') (ta'':=ta'').
+  apply IHe with (te:=te).
+  apply H.
+  apply H5.
+  apply H7.
+  apply H8.
+  (* dbase *)
+  constructor.
+  apply H5.
+  (* dabstr *)
+  constructor.
+  apply H6. 
+  apply IHe with (te:=(extend te i t')).   
+  apply identical_extend_identical.
+  apply H.  
+  apply H7.
+  (* dinl *)
+  constructor. 
+  apply H4.  
+  apply IHe with (te:=te).
+  apply H.
+  apply H6.
+  (* dinr *)
+  constructor.
+  apply H4.
+  apply IHe with (te:=te).
+  apply H.
+  apply H6.
+Qed.
+
 Lemma closed_substitution : forall te e1 e2 i t t2, 
   typing empty e2 t2 ->
   typing (extend te i t2) e1 t ->
@@ -1366,7 +1461,23 @@ Proof.
   (* ecase *)
   inversion Typing_e1; subst.
   unfold ssubst; fold ssubst.
-  admit.
+  apply ty_case with (t1:=t1) (t2:=t0) (ta:=ta) (ta1:=ta1).
+  apply IHe1_1. apply H6.
+  remember (beq_id i i0) as beq_id_i_i0.
+  destruct beq_id_i_i0.
+  apply beq_id_eq in Heqbeq_id_i_i0.
+  rewrite Heqbeq_id_i_i0 in H7.
+  pose (extend_shadow type te t2 t1).
+  apply exchangeable_context with (te:=(extend (extend te i0 t2) i0 t1)).
+  intros. apply e.
+  apply H7.
+  apply IHe1_2.
+  apply exchangeable_context with (te:=(extend (extend te i t2) i0 t1)).
+  apply extend_swap.
+  symmetry in Heqbeq_id_i_i0.
+  apply beq_id_false_not_eq in Heqbeq_id_i_i0.
+  apply Heqbeq_id_i_i0.
+  apply H7.
   (*ecast*)
   unfold ssubst; fold ssubst.
   inversion Typing_e1; subst.
@@ -1385,10 +1496,3 @@ Proof.
   (*dinr*)
   admit.
 Qed.
-
-
-
-
-
-
- 
