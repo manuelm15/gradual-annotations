@@ -1083,6 +1083,9 @@ Proof.
   auto.
 Qed.
 
+(* if x occurs free in x and in a typing environment te x = te' x,
+   then e has the same type in te and te' 
+   (especially: it types at all) *)
 Lemma context_invariance : forall te te' e t,
   (forall x, occurs_free x e -> te x = te' x) ->
   typing te e t ->
@@ -1170,6 +1173,8 @@ Proof.
   apply H.
 Qed.
 
+(* if there are free variables in e and e types in some environment,
+   then the variables are typed in that environment*)
 Lemma free_in_context : forall te x e t,
   occurs_free x e ->
   typing te e t ->
@@ -1206,6 +1211,7 @@ Proof.
   apply IHFree with (t:=t1). apply H5.
 Qed.
 
+(* if e types in an empty environment, then e is closed *)
 Lemma typable_empty_closed : forall e t,
   typing empty e t ->
   closed e.
@@ -1262,6 +1268,127 @@ Proof.
   apply IHtyping. apply HeqE.
   apply H3.
 Qed.
+
+(* if e types to t in an empty environment,
+   then it types to t in every environment *)
+Lemma typing_empty_typing_te : forall e t te,
+  typing empty e t ->
+  typing te e t.
+Proof.
+  intros.
+  apply (context_invariance empty te e t). intros.
+  apply typable_empty_closed in H.
+  unfold closed in H.
+  apply H in H0. inversion H0.
+  apply H.
+Qed.
+
+
+(* extending environments commutes,
+   as long as the variables added are not identical. *)
+Lemma extend_swap : forall A (ctxt: partial_map A) t1 t2 x1 x2,
+  x1 <> x2 ->
+  forall x, extend (extend ctxt x1 t1) x2 t2 x = extend (extend ctxt x2 t2) x1 t1 x.
+Proof.
+  intros.
+  remember (beq_id x1 x) as beq_id_x1_x.
+  remember (beq_id x2 x) as beq_id_x2_x.
+  destruct beq_id_x1_x.
+  destruct beq_id_x2_x.
+  apply beq_id_eq in Heqbeq_id_x1_x.
+  apply beq_id_eq in Heqbeq_id_x2_x.
+  apply not_eq_beq_id_false in H.
+  subst.
+  unfold beq_id in H.
+  destruct x.
+  rewrite <- beq_nat_refl in H.
+  inversion H.
+  unfold extend.
+  rewrite <- Heqbeq_id_x2_x.
+  rewrite <- Heqbeq_id_x1_x.
+  reflexivity.
+  destruct beq_id_x2_x.
+  unfold extend.
+  rewrite <- Heqbeq_id_x1_x.
+  rewrite <- Heqbeq_id_x2_x.
+  reflexivity.
+  unfold extend.
+  rewrite <- Heqbeq_id_x2_x.
+  rewrite <- Heqbeq_id_x1_x.
+  reflexivity.
+Qed.
+
+Lemma closed_substitution : forall te e1 e2 i t t2, 
+  typing empty e2 t2 ->
+  typing (extend te i t2) e1 t ->
+  typing te (ssubst e1 i e2) t.
+Proof.
+  intros te e1 e2 i t t2 Typing_e2 Typing_e1.
+  remember (@empty type) as Gamma.
+  generalize dependent t. 
+  generalize dependent te.
+  induction e1; intros te tt Typing_e1.
+  (* evar *)
+  unfold ssubst.
+  inversion Typing_e1; subst.
+  remember (beq_id i i0) as beq_id_i_i0.
+  destruct beq_id_i_i0.
+  inversion H1; subst.
+  apply typing_empty_typing_te. 
+  pose (extend_eq type te i0 t2).
+  apply beq_id_eq in Heqbeq_id_i_i0; subst.
+  symmetry in H0.
+  inversion H0; subst.
+  rewrite e in H1. inversion H1.
+  assumption.
+  apply (context_invariance (extend te i t2)).
+  intros.
+  inversion H; subst.
+  apply extend_neq.
+  symmetry. assumption. assumption.
+  (* eop *)
+  unfold ssubst; fold ssubst.
+  inversion Typing_e1; subst.
+  econstructor.
+  eapply IHe1_1.
+  eapply H3.
+  eapply IHe1_2.
+  eapply H5.
+  assumption.
+  (*eapp*)
+  inversion Typing_e1; subst.
+  apply IHe1_1 in H1.
+  apply IHe1_2 in H3.
+  unfold ssubst; fold ssubst.
+  apply ty_app with (t2:=t0) (ta:=ta) (ta1:=ta1).
+  apply H1. apply H3.
+  apply H5.
+  (* ecase *)
+  inversion Typing_e1; subst.
+  unfold ssubst; fold ssubst.
+  admit.
+  (*ecast*)
+  unfold ssubst; fold ssubst.
+  inversion Typing_e1; subst.
+  constructor.
+  apply IHe1.
+  assumption.
+  assumption.
+  (*eguard*)
+  admit.
+  (*dbase*)
+  admit.
+  (*dabstr*)
+  admit.
+  (*dinl*)
+  admit.
+  (*dinr*)
+  admit.
+Qed.
+
+
+
+
 
 
  
