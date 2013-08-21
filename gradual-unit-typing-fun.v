@@ -24,6 +24,7 @@ Hypothesis decide_op : forall o b1 b2,
   (exists b, b_rel o b1 b2 b) \/ (~exists b, b_rel o b1 b2 b)
 .
 
+(* Set of annotations *)
 Inductive ann : Set :=
 | anon : ann
 | acst : id -> ann
@@ -1021,4 +1022,150 @@ Inductive occurs_free (i : id) :  eterm -> Prop :=
   occurs_free i e ->
   occurs_free i (ecast e t1 t2 p)
 .
+
+Hint Constructors occurs_free.
+
+Inductive non_binding_context (e:eterm) : eterm -> Prop :=
+| nb_app_left : forall e2,
+  non_binding_context e (eappl e e2)
+| nb_app_right : forall e1,
+  non_binding_context e (eappl e1 e)
+| nb_base_left : forall o e2,
+  non_binding_context e (eop o e e2)
+| nb_base_right : forall o e1,
+  non_binding_context e (eop o e1 e)
+| nb_case : forall e1 e2 j k,
+  non_binding_context e (ecase e j e1 k e2)
+| nb_cast : forall t1 t2 p,
+  non_binding_context e (ecast e t1 t2 p)
+| nb_inl : forall va,
+  non_binding_context e (dinl e va)
+| nb_inr : forall va,
+  non_binding_context e (dinr e va)
+| nb_guard : forall f va,
+  non_binding_context e (eguard f va e)
+.
+
+Lemma weaken_free_ctx : forall (te:tenv) te' e ec,
+  non_binding_context e ec -> 
+  (forall x:id, occurs_free x ec -> te x = te' x)
+  ->
+  (forall x:id, occurs_free x e -> te x = te' x).
+Proof.
+  intros.
+  inversion H; subst; auto.
+Qed.
+
+Lemma weaken_free_3 : forall (te:tenv) te' o e1 e2,
+  (forall x : id, occurs_free x (eop o e1 e2) -> te x = te' x)
+  ->
+  (forall x : id, occurs_free x e1 -> te x = te' x).
+Proof.
+  auto.
+Qed.
+
+Lemma weaken_free_4 : forall (te:tenv) te' o e1 e2,
+  (forall x : id, occurs_free x (eop o e1 e2) -> te x = te' x)
+  ->
+  (forall x : id, occurs_free x e2 -> te x = te' x).
+Proof.
+  auto.
+Qed.
+
+Lemma weaken_free_case : forall (te:tenv) te' e i j e1 e2,
+  (forall x : id, occurs_free x (ecase e i e1 j e2) -> te x = te' x)
+  ->
+  (forall x : id, occurs_free x e -> te x = te' x).
+Proof.
+  auto.
+Qed.
+
+Lemma context_invariance : forall te te' e t,
+  (forall x, occurs_free x e -> te x = te' x) ->
+  typing te e t ->
+  typing te' e t.
+Proof.
+  intros.
+  generalize dependent te'.
+  induction H0; intros.
+  (* dbase *)
+  constructor. apply H.
+  (* evar *)
+  assert (occurs_free i (evar i)).
+    constructor.
+  apply H0 in H1.
+  constructor. rewrite <- H1. apply H.
+  (* dabstr *)
+  constructor. apply H.
+  apply IHtyping. intros.
+  unfold extend.
+  remember (beq_id i x) as beq_id_i_x.
+  destruct (beq_id_i_x). reflexivity.
+  apply H1.
+  constructor. apply H2.
+  apply beq_id_false_not_eq. rewrite Heqbeq_id_i_x.
+  rewrite beq_id_sym. reflexivity.
+  (* eguard *)
+  apply ty_guard with (ta':=ta') (ta'':=ta'').
+  apply IHtyping. intros.
+  apply H2.
+  constructor. apply H3.
+  apply H.
+  apply H1.
+  (* dinl *)
+  constructor. apply H.
+  apply IHtyping. intros.
+  apply H1.
+  constructor. apply H2.
+  (* dinr *)
+  constructor. apply H.
+  apply IHtyping. intros.
+  apply H1.
+  constructor. apply H2.
+  (* eop *)
+  apply ty_op with (ta1:=ta1) (ta2:=ta2).
+  apply IHtyping1.
+  pose (weaken_free_3 te te' o e1 e2 H0).
+  apply e.
+  apply IHtyping2.
+  pose (weaken_free_4 te te' o e1 e2 H0).
+  apply e.
+  apply H.
+  (* eappl *)
+  apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply IHtyping1. intros.
+  apply H0. apply of_app1. apply H1.
+  apply IHtyping2. intros.
+  apply H0. apply of_app2. apply H1.
+  apply H.
+  (* ecase *)
+  apply ty_case with (t1:=t1) (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply IHtyping1.
+  pose (weaken_free_case te te' e i j e1 e2).
+  apply e0. apply H0.
+  apply IHtyping2. intros.
+  unfold extend. remember (beq_id i x) as beq_id_i_x.
+  destruct beq_id_i_x. reflexivity.
+  apply H0.
+  apply of_case2. apply H1.
+  apply beq_id_false_not_eq. rewrite Heqbeq_id_i_x.
+  rewrite beq_id_sym. reflexivity.
+  apply IHtyping3. intros.
+  unfold extend. remember (beq_id j x) as beq_id_j_x.
+  destruct (beq_id_j_x). reflexivity.
+  apply H0.
+  apply of_case3. apply H1.
+  apply beq_id_false_not_eq. rewrite Heqbeq_id_j_x.
+  rewrite beq_id_sym. reflexivity.
+  apply H.
+  (* ecast *)
+  constructor.
+  apply IHtyping.
+  pose (weaken_free_ctx te te' e (ecast e t1 t2 p)).
+  apply e0.
+  constructor. apply H1.
+  apply H.
+Qed.
+
+
  
