@@ -1206,5 +1206,62 @@ Proof.
   apply IHFree with (t:=t1). apply H5.
 Qed.
 
+Lemma typable_empty_closed : forall e t,
+  typing empty e t ->
+  closed e.
+Proof.
+  intros.
+  remember (@empty type) as E.
+  unfold closed. unfold not. intros.
+  induction H.
+  (*dbase*)
+  inversion H0.
+  (*evar i*)
+  rewrite HeqE in H. inversion H.
+  (*dabstr i e va*)
+  inversion H0. subst.
+  pose (free_in_context (extend empty i t') x e t H4).
+  apply e0 in H1.
+  apply not_eq_beq_id_false in H6.
+  rewrite extend_neq in H1. inversion H1. inversion H2.
+  rewrite beq_id_sym. apply H6.
+  (* eguard *)
+  apply IHtyping. apply HeqE. inversion H0.
+  apply H4.
+  (* inl *)
+  apply IHtyping. apply HeqE. inversion H0.
+  apply H3.
+  (* inr *)
+  apply IHtyping. apply HeqE. inversion H0.
+  apply H3.
+  (* eop o e1 e2 *)
+  inversion H0.
+  apply IHtyping1. apply HeqE. apply H4.
+  apply IHtyping2. apply HeqE. apply H4.
+  (* eappl e1 e2 *)
+  inversion H0.
+  apply IHtyping1. apply HeqE. apply H4.
+  apply IHtyping2. apply HeqE. apply H4.
+  (* ecase e i e1 j e2 *)
+  inversion H0.
+  apply IHtyping1. apply HeqE. apply H5.
+  subst.
+  pose (free_in_context (extend empty i t1) x e1 (tann s ta) H6).
+  apply e0 in H1.
+  apply not_eq_beq_id_false in H10.
+  rewrite extend_neq in H1. inversion H1. inversion H4.
+  rewrite beq_id_sym. apply H10.
+  subst.
+  pose (free_in_context (extend empty j t2) x e2 (tann s ta) H6).
+  apply e0 in H2.
+  apply not_eq_beq_id_false in H10.
+  rewrite extend_neq in H2. inversion H2. inversion H4.
+  rewrite beq_id_sym. apply H10.
+  (*ecast*)
+  inversion H0.
+  apply IHtyping. apply HeqE.
+  apply H3.
+Qed.
+
 
  
