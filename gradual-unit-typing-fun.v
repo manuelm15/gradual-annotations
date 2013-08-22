@@ -1332,7 +1332,8 @@ Proof.
   apply H.
 Qed.
 
-(*typing does not change if environment stays the same for all variables*)
+(*typing does not change if environment stays the same for all variables.
+  this is a form of context invariance*)
 Lemma exchangeable_context : forall te te' e t,
   (forall x, te x = te' x) ->
   typing te e t ->
@@ -1478,6 +1479,22 @@ Proof.
   apply beq_id_false_not_eq in Heqbeq_id_i_i0.
   apply Heqbeq_id_i_i0.
   apply H7.
+  remember (beq_id i i1) as beq_id_i_i1.
+  destruct beq_id_i_i1.
+  apply beq_id_eq in Heqbeq_id_i_i1.
+  apply exchangeable_context with (te:=(extend (extend te i t2) i1 t0)).
+  rewrite Heqbeq_id_i_i1.
+  pose (extend_shadow type te t2 t0).
+  intros. apply e.
+  apply H8.
+  apply IHe1_3.
+  apply exchangeable_context with (te:=(extend (extend te i t2) i1 t0)).
+  apply extend_swap.
+  symmetry in Heqbeq_id_i_i1.
+  apply beq_id_false_not_eq.
+  apply Heqbeq_id_i_i1.
+  apply H8.
+  apply H9.
   (*ecast*)
   unfold ssubst; fold ssubst.
   inversion Typing_e1; subst.
@@ -1486,13 +1503,55 @@ Proof.
   assumption.
   assumption.
   (*eguard*)
-  admit.
+  unfold ssubst; fold ssubst.
+  inversion Typing_e1.
+  apply ty_guard with (ta':=ta') (ta'':=ta'').
+  apply IHe1. apply H3.
+  apply H5.
+  apply H6.
   (*dbase*)
-  admit.
+  unfold ssubst; fold ssubst.
+  apply context_invariance with (te:=(extend te i t2)).
+  intros.
+  assert (closed (dbase b v)).
+  inversion Typing_e1.
+  apply typable_empty_closed with (t:=tann tbase ta).
+  constructor.
+  apply H4.
+  unfold closed in H0. unfold not in H0.
+  apply H0 in H. inversion H.
+  apply Typing_e1.
   (*dabstr*)
-  admit.
+  unfold ssubst; fold ssubst.
+  remember (beq_id i i0) as beq_id_i_i0.
+  destruct beq_id_i_i0.
+  apply beq_id_eq in Heqbeq_id_i_i0.
+  inversion Typing_e1. subst.
+  constructor. apply H4.
+  apply exchangeable_context with (te:=(extend (extend te i0 t2) i0 t')).
+  pose (extend_shadow type te t2 t').
+  intros. apply e.
+  apply H5.
+  inversion Typing_e1. subst.
+  constructor.
+  apply H4.
+  apply IHe1.
+  apply exchangeable_context with (te:=(extend (extend te i t2) i0 t')).
+  apply extend_swap.
+  apply beq_id_false_not_eq. rewrite Heqbeq_id_i_i0. reflexivity.
+  apply H5.
   (*dinl*)
-  admit.
+  inversion Typing_e1.
+  unfold ssubst; fold ssubst.
+  constructor.
+  apply H2.
+  apply IHe1.
+  apply H4.
   (*dinr*)
-  admit.
+  inversion Typing_e1.
+  unfold ssubst; fold ssubst.
+  constructor.
+  apply H2.
+  apply IHe1.
+  apply H4.
 Qed.
