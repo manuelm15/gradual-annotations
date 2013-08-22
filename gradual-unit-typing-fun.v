@@ -1555,3 +1555,156 @@ Proof.
   apply IHe1.
   apply H4.
 Qed.
+
+Lemma typing_preservation : forall e e' t,
+  typing empty e t ->
+  smallstep e e' ->
+  typing empty e' t.
+Proof.
+  intros e e' t Htype Hss.
+  generalize dependent t.
+  induction Hss; intros t Htype; inversion Htype; subst.
+  (* eguard (join_v appl) va (ssubst e1 i e2)) *)
+  inversion H2. subst.
+  apply ty_guard with (ta':=ta) (ta'':=ta1).
+  apply closed_substitution with (t2:=t2).
+  apply H4.
+  apply H11.
+  apply H6.
+  apply H5.
+  (* eguard (join_v case) va (ssubst e1 i e)) *)
+  (* left case *)
+  inversion H7. subst.
+  apply ty_guard with (ta':=ta1) (ta'':=ta).
+  apply closed_substitution with (t2:=t1).
+  apply H11.
+  apply H8.
+  apply H10.
+  apply H4.
+  (* eguard (join_v case) va (ssubst e2 j e) *)
+  (* right case *)
+  inversion H7. subst.
+  apply ty_guard with (ta':=ta1) (ta'':=ta).
+  apply closed_substitution with (t2:=t2).
+  apply H11.
+  apply H9.
+  apply H10.
+  apply H4.
+  (*dbase*)
+  (* reduced from guard *)
+  inversion H4. subst.
+  constructor.
+  inversion H; inversion H6.
+  rewrite <- H5 in H2; rewrite <- H11 in H2.
+  inversion H2.
+  rewrite <- H3 in H7; rewrite <- H11 in H7.
+  inversion H7.
+  rewrite <- H5 in H2; rewrite <- H12 in H2.
+  inversion H2.
+  rewrite H16 in H0; rewrite H18 in H0.
+  pose (join_function p a0 a3 a a4).
+  assert (join p a0 a3 a /\ join p a0 a3 a4).
+  split. apply H0. apply H9.
+  apply e in H14.
+  rewrite H14.
+  constructor.
+  constructor.
+  rewrite <- H3 in H7; rewrite <- H11 in H7.
+  inversion H7.
+  (*dabstr ie va*)
+  (*reduced from guard term*)
+  inversion H4. subst.
+  inversion H6; inversion H.
+  rewrite <- H12 in H3; rewrite <- H2 in H3;
+  inversion H3.
+  constructor. constructor.
+  apply H10.
+  rewrite <- H2 in H7; rewrite <- H12 in H7;
+  inversion H7;
+  rewrite <- H13 in H3; rewrite <- H5 in H3;
+  inversion H3.
+  rewrite H17 in H9; rewrite H19 in H9.
+  constructor.
+  assert (a4 = a).
+  apply join_function with (o:=p) (a1:=a1) (a2:=a2).
+  split; [apply H9|apply H0].
+  rewrite H15; constructor.
+  apply H10.
+  subst; inversion H7.
+  (*dinl e va*)
+  (*reduced from guard term*)
+  inversion H5; subst.
+  inversion H8; inversion H6; subst.
+  inversion H7; inversion H0; subst.
+  constructor.
+  assert (a4 = a).
+  apply join_function with (o:=p) (a1:=ann0) (a2:=ann1);
+  split; [apply H14 | apply H4].
+  rewrite H1; constructor.
+  apply H10.
+  inversion H0.
+  inversion H0.
+  constructor.
+  inversion H7; inversion H0;
+  constructor.
+  apply H10.
+  (*dinr e va*)
+  (*reduced from guard term*)
+  inversion H5; subst.
+  inversion H8; inversion H6; subst.
+  inversion H7; inversion H0; subst.
+  constructor.
+  assert (a4 = a).
+  apply join_function with (o:=p) (a1:=ann0) (a2:=ann1);
+  split; [apply H14 | apply H4].
+  rewrite H1; constructor.
+  apply H10.
+  inversion H0.
+  inversion H0.
+  constructor.
+  inversion H7; inversion H0;
+  constructor.
+  apply H10.
+  (*dbase b va*)
+  (*generated from operation application*)
+  inversion H5; inversion H7; subst.
+  inversion H3; inversion H11; subst.
+  inversion H8; inversion H; subst.
+  assert (a4 = a).
+  apply join_function with (o:=(jop o)) (a1:=ann0) (a2:=ann1).
+  split; [apply H14| apply H6].
+  rewrite H1.
+  constructor. constructor.
+  inversion H.
+  inversion H.
+  inversion H8; inversion H; subst.
+  constructor. constructor.
+  (*value, generated from cast*)
+  inversion H0. subst.
+  constructor. inversion H2; constructor.
+
+  subst.
+  constructor. inversion H2; constructor.
+
+  constructor.
+  destruct t1b.
+  apply ty_app with (t2:=t1a) (ta:=ta1) (ta1:=t).
+  constructor.
+
+  destruct H1. constructor. constructor.
+
+  inversion H7.
+  apply exchangeable_context with (te:= (extend empty i t1a)).
+  intros.
+  pose (extend_shadow type empty t2a t1a x i).
+  symmetry. apply e1.
+  apply H13.
+
+  constructor. constructor. unfold extend.
+  SearchAbout beq_id.
+  rewrite <- beq_id_refl. reflexivity.
+  
+  inversion H8. apply H9.
+
+(*stuck here, this is likely not proofable. *)  
+  
