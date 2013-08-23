@@ -301,11 +301,12 @@ Inductive compatible : type -> type -> Prop :=
 | c_num : forall ta1 ta2,
   ann_compatible ta1 ta2 ->
   compatible (tann tbase ta1) (tann tbase ta2)
-| c_fun : forall t1a t1b t2a t2b ta1 ta2,
+| c_fun : forall t1a t1b s ta t2b ta1 ta2,
   compatible t1b t1a ->
-  compatible t2a t2b ->
+  compatible (tann s ta) t2b ->
   ann_compatible ta1 ta2 ->
-  compatible (tann (tfun t1a t2a) ta1) (tann (tfun t1b t2b) ta2)
+  join_t appl ta1 ta ta ->
+  compatible (tann (tfun t1a (tann s ta)) ta1) (tann (tfun t1b t2b) ta2)
 | c_sum : forall t1a t1b t2a t2b ta1 ta2,
   compatible t1a t1b ->
   compatible t2a t2b ->
@@ -847,41 +848,41 @@ Proof.
     (*ecast dabstr*)
     inversion H. inversion H0. rewrite <- H9 in H. inversion H.
 
-    rewrite <- H11 in H4. inversion H4. inversion H10. 
+    rewrite <- H12 in H4. inversion H4. inversion H10. 
     destruct va. subst. inversion H6.
     left. 
     exists (dabstr i (ecast (eappl (dabstr i e (vs a)) 
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vs a)).
+                         (ecast (evar i) t1b t1a (flip p))) (tann s ta0) t2b p) (vs a)).
     apply ss_cast. constructor.
     apply vc_lam with (a:=a); constructor.
 
-    rewrite <- H13 in H16. rewrite H16 in H6. inversion H6.
+    rewrite <- H14 in H17. rewrite H17 in H6. inversion H6.
 
-    destruct va. rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
+    destruct va. rewrite H17 in H6. rewrite <- H14 in H6. inversion H6.
 
-    pose (ann_eq_dec a a0). destruct s.
+    pose (ann_eq_dec a a0). destruct s0.
     left. rewrite <- e1.
     exists (dabstr i (ecast (eappl (dabstr i e (vd a0))
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vs a)).
+                         (ecast (evar i) t1b t1a (flip p))) (tann s ta0) t2b p) (vs a)).
     apply ss_cast; try constructor.
     rewrite <- e1. apply vc_lam with (a:=a); constructor.
 
     right. apply fc_abstr. apply n.
 
-    destruct va. rewrite H16 in H6. rewrite <- H13 in H6.
+    destruct va. rewrite H17 in H6. rewrite <- H14 in H6.
     inversion H6. left.
     exists (dabstr i (ecast (eappl (dabstr i e (vs a))
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vd a)).
+                         (ecast (evar i) t1b t1a (flip p))) (tann s ta0) t2b p) (vd a)).
     apply ss_cast. constructor.
     apply vc_lam with (a:=a); constructor.
 
-    rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
+    rewrite H17 in H6. rewrite <- H14 in H6. inversion H6.
 
-    destruct va. rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
+    destruct va. rewrite H17 in H6. rewrite <- H14 in H6. inversion H6.
 
     left.
     exists (dabstr i (ecast (eappl (dabstr i e (vd a))
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vd a)).
+                         (ecast (evar i) t1b t1a (flip p))) (tann s ta0) t2b p) (vd a)).
     apply ss_cast. constructor.
     apply vc_lam with (a:=a); constructor.
 
@@ -890,7 +891,7 @@ Proof.
     (* ecast dinl*)
     inversion H0. rewrite <- H3 in H. inversion H.
 
-    rewrite <- H5 in H. inversion H.
+    rewrite <- H6 in H. inversion H.
 
     inversion H4. destruct va.
     left. rewrite <- H7 in H5. rewrite <- H5 in H. inversion H.
@@ -940,7 +941,7 @@ Proof.
 
     rewrite <- H17 in H6. inversion H6.
 
-    rewrite <- H19 in H6. inversion H6.
+    rewrite <- H20 in H6. inversion H6.
 
     destruct va. inversion H12.
     rewrite <- H21 in H19. inversion H19; rewrite <- H25; rewrite <- H26.
@@ -1680,7 +1681,7 @@ Proof.
   inversion H8; inversion H; subst.
   constructor. constructor.
   (*value, generated from cast*)
-  inversion H0. subst.
+  inversion H0; subst.
   constructor. inversion H2; constructor.
 
   subst.
@@ -1703,8 +1704,56 @@ Proof.
   constructor. constructor. unfold extend.
   SearchAbout beq_id.
   rewrite <- beq_id_refl. reflexivity.
-  
+
+  inversion H8. apply H10.
+
+  inversion H8. apply H15.
+
+  inversion H8. apply H12.
+
+  constructor. inversion H2. constructor. constructor.
+
+  constructor. inversion H7. subst. apply H12.
+
   inversion H8. apply H9.
 
-(*stuck here, this is likely not proofable. *)  
+  constructor. inversion H2. constructor. constructor.
+
+  constructor. inversion H7. subst. apply H12.
+
+  inversion H8. apply H12.
+
+  (*eappl, made step on first argument*)
+  apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply IHHss. apply H1. apply H3. apply H5.
+
+  (*eappl, made step on second argument*)
+  apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply H1. apply IHHss. apply H3. apply H5.
+
+  (*eop, made step on first argument*)
+  apply ty_op with (ta1:=ta1) (ta2:=ta2).
+  apply IHHss. apply H3. apply H5. apply H6.
+
+  (*eop, made step on second argument*)
+  apply ty_op with (ta1:=ta1) (ta2:=ta2).
+  apply H3. apply IHHss. apply H5. apply H6.
+
+  (*eguard, made step on guarded term*)
+  apply ty_guard with (ta':=ta') (ta'':=ta'').
+  apply IHHss. apply H3. apply H5. apply H6.
+
+  (*ecase... *)
+  apply ty_case with (t1:=t1) (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply IHHss. apply H6. apply H7. apply H8. apply H9.
+
+  (*dinl... *)
+  constructor. apply H2. apply IHHss. apply H4.
+
+  (*dinr... *)
+  constructor. apply H2. apply IHHss. apply H4.
+
+  (*ecast*)
+  constructor. apply IHHss. apply H5. apply H6.
+Qed.
   
