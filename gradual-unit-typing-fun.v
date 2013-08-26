@@ -59,7 +59,7 @@ Hypothesis join_function : forall o a1 a2 a a',
   join o a1 a2 a /\ join o a1 a2 a'
   -> a = a'.
 
-(* it is decideable wether join is defined on arguments or not*)
+(* it is decideable whether join is defined on arguments or not*)
 Hypothesis decide_join : forall o a1 a2,
   (exists a, join o a1 a2 a) \/ (~ exists a, join o a1 a2 a).
 
@@ -94,6 +94,8 @@ Inductive join_t : join_param -> tyann -> tyann -> tyann -> Prop :=
                   join o a1 a2 a ->
                   join_t o (taan a1) (taan a2) (taan a)
 .
+
+
 
 Inductive type : Set :=
 | tann : stype -> tyann -> type
@@ -162,13 +164,19 @@ Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
   vtann_compatible a va1 ta1 ->
   vtann_compatible a va2 ta2 ->
   vcast (dbase b va1) (tann tbase ta1) (tann tbase ta2) (dbase b va2) p
-| vc_lam : forall a va1 va2 i e ta1 ta2 t1a t1b t2a t2b p,
-  vtann_compatible a va1 ta1 ->
-  vtann_compatible a va2 ta2 ->
-  vcast (dabstr i e va1) (tann (tfun t1a t1b) ta1) (tann (tfun t2a t2b) ta2) 
-        (dabstr i 
-            (ecast (eappl (dabstr i e va1) (ecast (evar i) t2a t1a (flip p)))
-            t1b t2b p) va2) p  (*RC-SG-CAST-FUN*)
+| vc_lam : forall a va ta va' ta' ta2 ta3 s2 x e p t1 t1' t2', 
+  vtann_compatible a va ta ->
+  vtann_compatible a va' ta' ->
+  join_t appl ta ta2 ta3 ->
+  vcast (dabstr x e va)
+        (tann (tfun t1 (tann s2 ta2)) ta)
+        (tann (tfun t1' t2') ta')
+        (dabstr x (ecast 
+                    (eappl (dabstr x e va) (ecast (evar x) t1' t1(flip p)))
+                    (tann s2 ta3)
+                    t2'
+                    p) va')
+        p
 | vc_inl : forall a va1 ta1 va2 ta2 e t1a t1b t2a t2b p,
   vtann_compatible a va1 ta1 ->
   vtann_compatible a va2 ta2 ->
@@ -845,48 +853,57 @@ Proof.
     apply vc_base with (a:=a); constructor.
 
     (*ecast dabstr*)
-    inversion H. inversion H0. rewrite <- H9 in H. inversion H.
+    inversion H. subst.
+    destruct t; destruct t'. inversion H0. subst.
 
-    rewrite <- H11 in H4. inversion H4. inversion H10. 
-    destruct va. subst. inversion H6.
-    left. 
-    exists (dabstr i (ecast (eappl (dabstr i e (vs a)) 
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vs a)).
-    apply ss_cast. constructor.
-    apply vc_lam with (a:=a); constructor.
+    inversion H0. subst. inversion H14. subst. inversion H6.
+    subst. left.
+    destruct t.
+    pose (decide_join appl a a0).
+    destruct o. destruct H1.
+    exists (dabstr i
+                (ecast (eappl (dabstr i e (vs a))
+                              (ecast (evar i) t1b (tann s0 t0) (flip p)))
+                       (tann s (taan x)) t2b p) (vs a)).
+      constructor. constructor.
+      apply vc_lam with (a:=a). constructor. constructor.
+      constructor.
+      apply H1.
 
-    rewrite <- H13 in H16. rewrite H16 in H6. inversion H6.
+    subst. inversion H6. subst.
 
-    destruct va. rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
-
-    pose (ann_eq_dec a a0). destruct s.
-    left. rewrite <- e1.
-    exists (dabstr i (ecast (eappl (dabstr i e (vd a0))
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vs a)).
-    apply ss_cast; try constructor.
-    rewrite <- e1. apply vc_lam with (a:=a); constructor.
+    pose (ann_eq_dec a ann0).
+    destruct s1. symmetry in e0. subst. left.
+    exists (dabstr i
+              (ecast (eappl (dabstr i e (vd a))
+                            (ecast (evar i) t1b (tann s0 t0) (flip p)))
+                     (tann s t) t2b p) (vs a)).
+      constructor. constructor.
+      apply vc_lam with (a:=a).
+      constructor. constructor. apply H1.
 
     right. apply fc_abstr. apply n.
 
-    destruct va. rewrite H16 in H6. rewrite <- H13 in H6.
-    inversion H6. left.
-    exists (dabstr i (ecast (eappl (dabstr i e (vs a))
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vd a)).
-    apply ss_cast. constructor.
-    apply vc_lam with (a:=a); constructor.
+    inversion H9. subst. inversion H6. subst. left.
+    exists (dabstr i
+               (ecast (eappl (dabstr i e (vs a))
+                             (ecast (evar i) t1b (tann s0 t0) (flip p)))
+                      (tann s t) t2b p) (vd a)).
+       constructor. constructor.
+       apply vc_lam with (a:=a).
+       constructor. constructor. apply H1.
 
-    rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
-
-    destruct va. rewrite H16 in H6. rewrite <- H13 in H6. inversion H6.
-
+    subst. inversion H6. subst.
     left.
-    exists (dabstr i (ecast (eappl (dabstr i e (vd a))
-                         (ecast (evar i) t1b t1a (flip p))) t2a t2b p) (vd a)).
-    apply ss_cast. constructor.
-    apply vc_lam with (a:=a); constructor.
-
-    rewrite <- H11 in H4. inversion H4.
-
+    exists (dabstr i
+               (ecast (eappl (dabstr i e (vd ann0))
+                             (ecast (evar i) t1b (tann s0 t0) (flip p)))
+                       (tann s t) t2b p) (vd ann0)).
+       constructor. constructor.
+       apply vc_lam with (a:=ann0).
+       constructor. constructor.
+       apply H1.
+    right. apply fc_cast_fun. apply H1.
     (* ecast dinl*)
     inversion H0. rewrite <- H3 in H. inversion H.
 
@@ -1687,24 +1704,24 @@ Proof.
   constructor. inversion H2; constructor.
 
   constructor.
-  destruct t1b.
-  apply ty_app with (t2:=t1a) (ta:=ta1) (ta1:=t).
+  apply ty_app with (t2:=(tann s1 ta2)) (ta:=ta) (ta1:=ta3).
   constructor.
 
   destruct H1. constructor. constructor.
 
   inversion H7.
-  apply exchangeable_context with (te:= (extend empty i t1a)).
+  apply exchangeable_context with (te:= (extend empty x (tann s1 ta2))).
   intros.
-  pose (extend_shadow type empty t2a t1a x i).
+  pose (extend_shadow type empty t1' (tann s1 ta2) x0 x).
   symmetry. apply e1.
-  apply H13.
+  apply H14.
 
   constructor. constructor. unfold extend.
-  SearchAbout beq_id.
+
   rewrite <- beq_id_refl. reflexivity.
-  
-  inversion H8. apply H9.
+
+  inversion H8. apply H10.
+  apply H3.
 
 (*stuck here, this is likely not proofable. *)  
   
