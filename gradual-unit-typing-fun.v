@@ -433,6 +433,10 @@ Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to s
 | fc_inr_ind : forall e va, 
   stuckterm e ->
   stuckterm (dinr e va)
+| fc_fun_cast : forall x e va ta ta2 t1 s2 t1' t2' ta' p, 
+  ~ (exists ta3, join_t appl ta ta2 ta3) ->
+  stuckterm (ecast (dabstr x e va) (tann (tfun t1 (tann s2 ta2)) ta)
+                                   (tann (tfun t1' t2') ta') p)
 .
 
 
@@ -857,10 +861,10 @@ Proof.
     destruct t; destruct t'. inversion H0. subst.
 
     inversion H0. subst. inversion H14. subst. inversion H6.
-    subst. left.
+    subst.
     destruct t.
     pose (decide_join appl a a0).
-    destruct o. destruct H1.
+    destruct o. left. destruct H1.
     exists (dabstr i
                 (ecast (eappl (dabstr i e (vs a))
                               (ecast (evar i) t1b (tann s0 t0) (flip p)))
@@ -869,29 +873,18 @@ Proof.
       apply vc_lam with (a:=a). constructor. constructor.
       constructor.
       apply H1.
+    right.
+    apply fc_fun_cast.
+    unfold not. unfold not in H1. intros. apply H1.
+    destruct H2. inversion H2. exists a3. apply H12.
 
     subst. inversion H6. subst.
 
-    pose (ann_eq_dec a ann0).
-    destruct s1. symmetry in e0. subst. left.
-    exists (dabstr i
-              (ecast (eappl (dabstr i e (vd a))
-                            (ecast (evar i) t1b (tann s0 t0) (flip p)))
-                     (tann s t) t2b p) (vs a)).
-      constructor. constructor.
-      apply vc_lam with (a:=a).
-      constructor. constructor. apply H1.
+    right. apply fc_fun_cast.
+    unfold not. intros. destruct H1. inversion H1.
 
-    right. apply fc_abstr. apply n.
-
-    inversion H9. subst. inversion H6. subst. left.
-    exists (dabstr i
-               (ecast (eappl (dabstr i e (vs a))
-                             (ecast (evar i) t1b (tann s0 t0) (flip p)))
-                      (tann s t) t2b p) (vd a)).
-       constructor. constructor.
-       apply vc_lam with (a:=a).
-       constructor. constructor. apply H1.
+    destruct t. right. apply fc_fun_cast.
+    unfold not. intros. destruct H3. inversion H3.
 
     subst. inversion H6. subst.
     left.
