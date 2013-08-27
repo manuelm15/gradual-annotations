@@ -24,6 +24,7 @@ Hypothesis decide_op : forall o b1 b2,
   (exists b, b_rel o b1 b2 b) \/ (~exists b, b_rel o b1 b2 b)
 .
 
+
 (* Set of annotations *)
 Inductive ann : Set :=
 | anon : ann
@@ -62,6 +63,11 @@ Hypothesis join_function : forall o a1 a2 a a',
 (* it is decideable whether join is defined on arguments or not*)
 Hypothesis decide_join : forall o a1 a2,
   (exists a, join o a1 a2 a) \/ (~ exists a, join o a1 a2 a).
+
+(*join_app is a total function*)
+(* this is at least true for dependency analysis.. *)
+Hypothesis join_app_total : forall a1 a2,
+  (exists a, join appl a1 a2 a).
 
 (*Set of type annotations*)
 Inductive tyann : Set :=
@@ -433,10 +439,6 @@ Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to s
 | fc_inr_ind : forall e va, 
   stuckterm e ->
   stuckterm (dinr e va)
-| fc_fun_cast : forall x e va ta ta2 t1 s2 t1' t2' ta' p, 
-  ~ (exists ta3, join_t appl ta ta2 ta3) ->
-  stuckterm (ecast (dabstr x e va) (tann (tfun t1 (tann s2 ta2)) ta)
-                                   (tann (tfun t1' t2') ta') p)
 .
 
 
@@ -857,46 +859,8 @@ Proof.
     apply vc_base with (a:=a); constructor.
 
     (*ecast dabstr*)
-    inversion H. subst.
-    destruct t; destruct t'. inversion H0. subst.
-
-    inversion H0. subst. inversion H14. subst. inversion H6.
-    subst.
-    destruct t.
-    pose (decide_join appl a a0).
-    destruct o. left. destruct H1.
-    exists (dabstr i
-                (ecast (eappl (dabstr i e (vs a))
-                              (ecast (evar i) t1b (tann s0 t0) (flip p)))
-                       (tann s (taan x)) t2b p) (vs a)).
-      constructor. constructor.
-      apply vc_lam with (a:=a). constructor. constructor.
-      constructor.
-      apply H1.
-    right.
-    apply fc_fun_cast.
-    unfold not. unfold not in H1. intros. apply H1.
-    destruct H2. inversion H2. exists a3. apply H12.
-
-    subst. inversion H6. subst.
-
-    right. apply fc_fun_cast.
-    unfold not. intros. destruct H1. inversion H1.
-
-    destruct t. right. apply fc_fun_cast.
-    unfold not. intros. destruct H3. inversion H3.
-
-    subst. inversion H6. subst.
-    left.
-    exists (dabstr i
-               (ecast (eappl (dabstr i e (vd ann0))
-                             (ecast (evar i) t1b (tann s0 t0) (flip p)))
-                       (tann s t) t2b p) (vd ann0)).
-       constructor. constructor.
-       apply vc_lam with (a:=ann0).
-       constructor. constructor.
-       apply H1.
-    right. apply fc_cast_fun. apply H1.
+    admit. (*TODO*)
+                                         
     (* ecast dinl*)
     inversion H0. rewrite <- H3 in H. inversion H.
 
@@ -1697,15 +1661,15 @@ Proof.
   constructor. inversion H2; constructor.
 
   constructor.
-  apply ty_app with (t2:=(tann s1 ta2)) (ta:=ta) (ta1:=ta3).
-  constructor.
+  apply ty_app with (t2:=t0) (ta:=ta) (ta1:=ta2).
+  constructor. 
 
   destruct H1. constructor. constructor.
 
   inversion H7.
-  apply exchangeable_context with (te:= (extend empty x (tann s1 ta2))).
+  apply exchangeable_context with (te:= (extend empty x t0)).
   intros.
-  pose (extend_shadow type empty t1' (tann s1 ta2) x0 x).
+  pose (extend_shadow type empty t1' t0 x0 x).
   symmetry. apply e1.
   apply H14.
 
@@ -1715,6 +1679,20 @@ Proof.
 
   inversion H8. apply H10.
   apply H3.
+
+  inversion H8. inversion H3. inversion H13. constructor.
+  destruct ta5. constructor. constructor.
+
+  constructor. apply H21. apply H22.
+  destruct ta5. constructor. constructor.
+
+  constructor. apply H21. apply H22.
+  destruct ta5. constructor. constructor.
+
+  inversion H13. constructor.
+  rewrite <- H18 in 
+  
+  
 
 (*stuck here, this is likely not proofable. *)  
   
