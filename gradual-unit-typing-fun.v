@@ -64,11 +64,6 @@ Hypothesis join_function : forall o a1 a2 a a',
 Hypothesis decide_join : forall o a1 a2,
   (exists a, join o a1 a2 a) \/ (~ exists a, join o a1 a2 a).
 
-(*join_app is a total function*)
-(* this is at least true for dependency analysis.. *)
-Hypothesis join_app_total : forall a1 a2,
-  (exists a, join appl a1 a2 a).
-
 (*Set of type annotations*)
 Inductive tyann : Set :=
 | taan : ann -> tyann
@@ -101,7 +96,19 @@ Inductive join_t : join_param -> tyann -> tyann -> tyann -> Prop :=
                   join_t o (taan a1) (taan a2) (taan a)
 .
 
-
+Lemma join_t_function : forall p ta1 ta2 ta3 ta4,
+  (join_t p ta1 ta2 ta3 /\ join_t p ta1 ta2 ta4) ->
+  ta3 = ta4.
+Proof.
+  intros. destruct H.
+  inversion H; subst; inversion H0; subst.
+  constructor.
+  (assert (a=a4)).
+  apply join_function with (o:=p) (a1:=a1) (a2:=a2).
+  split. apply H1. apply H5.
+  subst; reflexivity.
+Qed.
+  
 
 Inductive type : Set :=
 | tann : stype -> tyann -> type
@@ -315,11 +322,13 @@ Inductive compatible : type -> type -> Prop :=
 | c_num : forall ta1 ta2,
   ann_compatible ta1 ta2 ->
   compatible (tann tbase ta1) (tann tbase ta2)
-| c_fun : forall t1a t1b t2a t2b ta1 ta2,
-  compatible t1b t1a ->
-  compatible t2a t2b ->
-  ann_compatible ta1 ta2 ->
-  compatible (tann (tfun t1a t2a) ta1) (tann (tfun t1b t2b) ta2)
+| c_fun : forall t1' t1 t2' s2 ta2 ta ta3 ta',
+  compatible t1' t1 ->
+  join_t appl ta ta2 ta3 ->
+  compatible (tann s2 ta3) t2' ->
+  ann_compatible ta ta' ->
+  compatible (tann (tfun t1 (tann s2 ta2)) ta)
+             (tann (tfun t1' t2') ta')
 | c_sum : forall t1a t1b t2a t2b ta1 ta2,
   compatible t1a t1b ->
   compatible t2a t2b ->
@@ -859,12 +868,65 @@ Proof.
     apply vc_base with (a:=a); constructor.
 
     (*ecast dabstr*)
-    admit. (*TODO*)
+    inversion H0; subst.
+
+    inversion H.
+
+
+    inversion H4. subst.
+
+    inversion H. inversion H8. left.
+    exists (dabstr i
+             (ecast (eappl
+                        (dabstr i e (vs a))
+                        (ecast (evar i) t1' t0 (flip p)))
+                     (tann s2 ta3) (t2') p) (vs a)).
+
+    constructor. constructor. apply vc_lam with (a:=a).
+    constructor. constructor. apply H2.
+
+    subst. inversion H. subst. inversion H8. subst.
+
+    pose (ann_eq_dec a ann0).
+    destruct s. subst. left.
+        exists (dabstr i
+             (ecast (eappl
+                        (dabstr i e (vd ann0))
+                        (ecast (evar i) t1' t0 (flip p)))
+                     (tann s2 ta3) (t2') p) (vs ann0)).
+
+    constructor. constructor. apply vc_lam with (a:=ann0).
+    constructor. constructor. apply H2.
+
+    right. apply fc_abstr. apply n.
+
+    subst. inversion H. subst. inversion H8. subst.
+
+    left.
+    exists (dabstr i
+             (ecast (eappl
+                        (dabstr i e (vs a))
+                        (ecast (evar i) t1' t0 (flip p)))
+                     (tann s2 ta3) (t2') p) (vd a)).
+    constructor. constructor. apply vc_lam with (a:=a).
+    constructor. constructor. apply H2.
+
+    subst. inversion H. subst. inversion H8. subst.
+
+    left. exists (dabstr i
+         (ecast (eappl
+                    (dabstr i e (vd ann0))
+                    (ecast (evar i) t1' t0 (flip p)))
+                (tann s2 ta3) (t2') p) (vd ann0)).
+    constructor. constructor. apply vc_lam with (a:=ann0).
+    constructor. constructor. apply H2.
+
+    inversion H.
                                          
     (* ecast dinl*)
     inversion H0. rewrite <- H3 in H. inversion H.
 
-    rewrite <- H5 in H. inversion H.
+    rewrite <- H6 in H. inversion H.
 
     inversion H4. destruct va.
     left. rewrite <- H7 in H5. rewrite <- H5 in H. inversion H.
@@ -914,7 +976,7 @@ Proof.
 
     rewrite <- H17 in H6. inversion H6.
 
-    rewrite <- H19 in H6. inversion H6.
+    rewrite <- H20 in H6. inversion H6.
 
     destruct va. inversion H12.
     rewrite <- H21 in H19. inversion H19; rewrite <- H25; rewrite <- H26.
@@ -1677,22 +1739,58 @@ Proof.
 
   rewrite <- beq_id_refl. reflexivity.
 
-  inversion H8. apply H10.
+  inversion H8. apply H11.
   apply H3.
+  inversion H8. subst.
+  assert (ta3 = ta4).
+    pose (join_t_function appl ta ta2 ta3 ta4).
+    apply e. split.
+    apply H3.
+    apply H14.
+  subst. apply H15.
+   
+  subst. constructor. inversion H2. constructor. constructor.
 
-  inversion H8. inversion H3. inversion H13. constructor.
-  destruct ta5. constructor. constructor.
+  constructor. inversion H7. apply H12.
 
-  constructor. apply H21. apply H22.
-  destruct ta5. constructor. constructor.
+  inversion H8. apply H9.
 
-  constructor. apply H21. apply H22.
-  destruct ta5. constructor. constructor.
+  constructor. inversion H2. constructor. constructor.
 
-  inversion H13. constructor.
-  rewrite <- H18 in 
-  
-  
+  subst. constructor. inversion H7. apply H12.
 
-(*stuck here, this is likely not proofable. *)  
-  
+  inversion H8. apply H12.
+
+  (*eappl, made step on first argument*)
+  apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply IHHss. apply H1. apply H3. apply H5.
+
+  (*eappl, made step on second argument*)
+  apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply H1. apply IHHss. apply H3. apply H5.
+
+  (*eop, made step on first argument*)
+  apply ty_op with (ta1:=ta1) (ta2:=ta2).
+  apply IHHss. apply H3. apply H5. apply H6.
+
+  (*eop, made step on second argument*)
+  apply ty_op with (ta1:=ta1) (ta2:=ta2).
+  apply H3. apply IHHss. apply H5. apply H6.
+
+  (*eguard, made step on guarded term*)
+  apply ty_guard with (ta':=ta') (ta'':=ta'').
+  apply IHHss. apply H3. apply H5. apply H6.
+
+  (*ecase... *)
+  apply ty_case with (t1:=t1) (t2:=t2) (ta:=ta) (ta1:=ta1).
+  apply IHHss. apply H6. apply H7. apply H8. apply H9.
+
+  (*dinl... *)
+  constructor. apply H2. apply IHHss. apply H4.
+
+  (*dinr... *)
+  constructor. apply H2. apply IHHss. apply H4.
+
+  (*ecast*)
+  constructor. apply IHHss. apply H5. apply H6.
+Qed.
