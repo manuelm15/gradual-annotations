@@ -1794,3 +1794,60 @@ Proof.
   (*ecast*)
   constructor. apply IHHss. apply H5. apply H6.
 Qed.
+
+(* type preservation carries over multiple steps*)
+Lemma transitive_type_preservation : forall e e' t,
+  typing empty e t ->
+  refl_step_closure smallstep e e' ->
+  typing empty e' t.
+Proof.
+  intros e e' t Typing Multistep.
+  induction Multistep. 
+  assumption.
+  apply IHMultistep.
+  apply typing_preservation with x.
+  assumption.
+  assumption.
+Qed.
+
+Definition stuck (e:eterm) :=
+  ~ (exists e', smallstep e e') /\ ~ value e /\ ~ stuckterm e.
+
+Theorem type_soundness : forall e e' t,
+  typing empty e t ->
+  refl_step_closure smallstep e e' ->
+  ~ stuck e'.
+Proof.
+  intros e e' t Typing Multistep.
+  unfold stuck.
+  intros [Hnf Hnv].
+  inversion Hnv.
+  induction Multistep.
+  apply progress in Typing.
+  inversion Typing as [Tv | Tss].
+  apply Hnv in Tv. contradiction.
+  inversion Tss as [Ts | Tstuck].
+  apply Hnf in Ts. contradiction.
+  apply H0 in Tstuck.
+  contradiction.
+  apply typing_preservation with x y t in Typing.
+  apply IHMultistep.
+  assumption.
+  apply progress in Typing.
+  inversion Typing as [Tv | Ts].
+  assumption.
+  assumption.
+  assumption.
+  assumption.
+  assumption.
+  assumption.
+Qed.
+
+(*cast related subtyping on annotations, neutral*)
+Inductive subtype_tyann : tyann -> tyann -> Prop :=
+| subtype_tyann_static : forall a,
+  subtype_tyann (taann a) (taann a)
+| subtype_tyann_dynamic : 
+  subtype_tyann tadyn tadyn.
+
+
