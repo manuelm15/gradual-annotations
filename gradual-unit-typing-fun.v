@@ -118,6 +118,9 @@ with stype : Set :=
 | tsum : type -> type  -> stype
 .
 
+Scheme type_mut := Induction for type Sort Prop
+with stype_mut := Induction for stype Sort Prop.
+
 Inductive blame : Set :=
 | pos_blame : blame
 | neg_blame : blame
@@ -142,8 +145,8 @@ Inductive eterm : Type :=
 with which argument*)
 | dbase : B ->  vann -> eterm (*value of base-type, a constant*)
 | dabstr : id -> eterm -> vann -> eterm (*lambda-expression*)
-| dinl : eterm -> vann -> eterm (*lnl e va*)
-| dinr : eterm -> vann -> eterm (*lnr e va*)
+| dinl : eterm -> vann -> eterm (*inl e va*)
+| dinr : eterm -> vann -> eterm (*inr e va*)
 .
 
 
@@ -984,7 +987,7 @@ Proof.
     left.
     exists (dinr (ecast e t2a t2b p) (vs a)).
     apply ss_cast. constructor. apply H1.
-    apply vc_inr with (a:=a); constructor.
+    apply  vc_inr with (a:=a); constructor.
 
     left. exists (dinr (ecast e t2a t2b p) (vd a)).
     apply ss_cast. constructor. apply H1.
@@ -1846,8 +1849,895 @@ Qed.
 (*cast related subtyping on annotations, neutral*)
 Inductive subtype_tyann : tyann -> tyann -> Prop :=
 | subtype_tyann_static : forall a,
-  subtype_tyann (taann a) (taann a)
+  subtype_tyann (taan a) (taan a)
 | subtype_tyann_dynamic : 
   subtype_tyann tadyn tadyn.
 
+(*cast related subtyping on types, neutral*)
+Inductive subtype : type -> type -> Prop :=
+| subtype_base : forall ta1 ta2,
+  subtype_tyann ta1 ta2 ->
+  subtype (tann tbase ta1) (tann tbase ta2)
+| subtype_fun : forall t1 t1' t2 t2' ta1 ta2,
+  subtype_tyann ta1 ta2 ->
+  subtype t2' t1' ->
+  subtype t1 t2 ->
+  subtype (tann (tfun t1' t1) ta1) (tann (tfun t2' t2) ta2)
+| subtype_sum : forall t1 t2 ta1 t1' t2' ta2,
+  subtype_tyann ta1 ta2 ->
+  subtype t1 t1' ->
+  subtype t2 t2' ->
+  subtype (tann (tsum t1 t2) ta1) (tann (tsum t1' t2') ta2)
+.
 
+(*cast related subtyping on annotations, positive*)
+Inductive subtype_pos_tyann : tyann -> tyann -> Prop :=
+| subtype_pos_tyann_static : forall a,
+  subtype_pos_tyann (taan a) (taan a)
+| subtype_pos_tyann_dynamic : 
+  subtype_pos_tyann tadyn tadyn
+| subtype_pos_tyann_mixed : forall a,
+  subtype_pos_tyann (taan a) tadyn.
+
+(*cast related subtyping on annotations, negative*)
+Inductive subtype_neg_tyann : tyann -> tyann -> Prop :=
+| subtype_neg_tyann_static : forall a,
+  subtype_neg_tyann (taan a) (taan a)
+| subtype_neg_tyann_dynamic :
+  subtype_neg_tyann tadyn tadyn
+| subtype_neg_tyann_mixed : forall a,
+  subtype_neg_tyann tadyn (taan a).
+
+(*cast related subtyping on types, positive*)
+Inductive subtype_pos : type -> type -> Prop :=
+| subtype_pos_base : forall ta1 ta2,
+  subtype_pos_tyann ta1 ta2 ->
+  subtype_pos (tann tbase ta1) (tann tbase ta2)
+| subtype_pos_fun : forall t1 t1' t2 t2' ta1 ta2,
+  subtype_pos_tyann ta1 ta2 ->
+  subtype_pos t1 t2 ->
+  subtype_neg t2' t1' ->
+  subtype_pos (tann (tfun t1' t1) ta1) (tann (tfun t2' t2) ta2)
+| subtype_pos_sum : forall t1 t2 ta1 t1' t2' ta2,
+  subtype_pos_tyann ta1 ta2 ->
+  subtype_pos t1 t1' ->
+  subtype_pos t2 t2' ->
+  subtype_pos (tann (tsum t1 t2) ta1) (tann (tsum t1' t2') ta2)
+with subtype_neg : type -> type -> Prop :=
+| subtype_neg_base : forall ta1 ta2,
+  subtype_neg_tyann ta1 ta2 ->
+  subtype_neg (tann tbase ta1) (tann tbase ta2)
+| subtype_neg_fun : forall t1 t1' t2 t2' ta1 ta2,
+  subtype_neg_tyann ta1 ta2 ->
+  subtype_neg t1 t2 ->
+  subtype_pos t2' t1' ->
+  subtype_neg (tann (tfun t1' t1) ta1) (tann (tfun t2' t2) ta2)
+| subtype_neg_sum : forall t1 t2 ta1 t1' t2' ta2,
+  subtype_neg_tyann ta1 ta2 ->
+  subtype_neg t1 t1' ->
+  subtype_neg t2 t2' ->
+  subtype_neg (tann (tsum t1 t2) ta1) (tann (tsum t1' t2') ta2).
+
+Scheme subtype_pos_mut := Induction for subtype_pos Sort Prop
+with subtype_neg_mut := Induction for subtype_neg Sort Prop.
+
+Lemma subtype_tyann_refl : forall ta, subtype_tyann ta ta.
+Proof.
+ intros ta.
+ destruct ta. 
+ apply subtype_tyann_static.
+ apply subtype_tyann_dynamic.
+Qed.
+
+Lemma subtype_refl : forall t, subtype t t.
+Proof.
+ intros.
+ apply type_mut with (P := fun t => subtype t t) (P0 := fun s => forall a, subtype (tann s a) (tann s a)).
+ intros. 
+ apply H.
+ constructor. apply subtype_tyann_refl.
+ intros.
+ constructor. apply subtype_tyann_refl.
+ assumption. assumption.
+ intros.
+ constructor. apply subtype_tyann_refl.
+ assumption. assumption.
+Qed.
+
+Lemma subtype_tyann_transitive : forall ta1 ta2 ta3,
+  subtype_tyann ta1 ta2 -> 
+  subtype_tyann ta2 ta3 ->
+  subtype_tyann ta1 ta3.
+Proof.
+ intros.
+ inversion H; inversion H0; subst; assumption.
+Qed.
+
+Lemma subtype_transitive : forall t1 t2 t3,
+  subtype t1 t2 ->
+  subtype t2 t3 ->
+  subtype t1 t3.
+Proof.
+  intros.
+  generalize dependent t1.
+  generalize dependent t3.
+  apply type_mut with (P := fun t2 => forall t3, subtype t2 t3 -> forall t1, subtype t1 t2 -> subtype t1 t3) 
+                      (P0 := fun s => forall a t3, subtype (tann s a) t3 -> 
+                                      forall t1, subtype t1 (tann s a) -> 
+                                      subtype t1 t3).
+  intros. 
+  apply H with (a:=t).  apply H0. apply H1.
+  
+  intros.
+  inversion H; inversion H0; subst. constructor. apply subtype_tyann_transitive with (ta2:=a).
+  apply H6. apply H2.
+
+  intros.
+  inversion H1; inversion H2; subst.
+  constructor. apply subtype_tyann_transitive with (ta2:=a).
+  apply H14. apply H6.
+  apply H. apply H15. apply H8.
+  apply H0. apply H9. apply H16.
+
+  intros.
+  inversion H1; inversion H2; subst.
+  constructor. apply subtype_tyann_transitive with (ta2:=a).
+  apply H14. apply H6.
+  apply H. apply H8. apply H15.
+  apply H0. apply H9. apply H16.
+Qed.
+
+Lemma subtype_pos_tyann_reflexive : forall ta,
+  subtype_pos_tyann ta ta.
+Proof.
+  intros. destruct ta; constructor.
+Qed.
+
+Lemma subtype_neg_tyann_reflexive : forall ta,
+  subtype_neg_tyann ta ta.
+Proof.
+  intros. destruct ta; constructor.
+Qed.
+
+Lemma subtype_pos_tyann_transitive : forall ta1 ta2 ta3,
+  subtype_pos_tyann ta1 ta2 ->
+  subtype_pos_tyann ta2 ta3 ->
+  subtype_pos_tyann ta1 ta3.
+Proof.
+  intros.
+  inversion H; inversion H0; subst; try assumption.
+  inversion H0.
+Qed.
+
+Lemma subtype_neg_tyann_transitive : forall ta1 ta2 ta3,
+  subtype_neg_tyann ta1 ta2 ->
+  subtype_neg_tyann ta2 ta3 ->
+  subtype_neg_tyann ta1 ta3.
+Proof.
+  intros.
+  inversion H0; inversion H; subst; try assumption.
+  inversion H.
+Qed.
+
+Lemma subtype_pos_neg_reflexive : forall t,
+  subtype_pos t t /\ subtype_neg t t.
+Proof.
+  intros.
+  apply type_mut with (P:= fun t => subtype_pos t t /\ subtype_neg t t)
+                      (P0:= fun s => forall ta, subtype_pos (tann s ta) (tann s ta) 
+                                             /\ subtype_neg (tann s ta) (tann s ta)); intros.
+  apply H.
+
+  split; constructor.
+    apply subtype_pos_tyann_reflexive.
+    apply subtype_neg_tyann_reflexive.
+
+  split; constructor.
+    apply subtype_pos_tyann_reflexive.
+    destruct H0. apply H0.
+    destruct H. apply H1.
+
+    apply subtype_neg_tyann_reflexive.
+    destruct H0. apply H1.
+    destruct H. apply H.
+
+  split; constructor.
+
+    apply subtype_pos_tyann_reflexive.
+    destruct H. apply H.
+    destruct H0. apply H0.
+
+    apply subtype_neg_tyann_reflexive.
+    destruct H. apply H1.
+    destruct H0. apply H1.
+Qed.
+
+
+Lemma subtype_pos_neg_transitive : forall t1 t2 t3,
+  (subtype_pos t1 t2 -> subtype_pos t2 t3 -> subtype_pos t1 t3) /\
+  (subtype_neg t1 t2 -> subtype_neg t2 t3 -> subtype_neg t1 t3).
+Proof.
+  intros.
+  generalize dependent t1.
+  generalize dependent t3.
+  apply type_mut with (P:= fun t2 => forall t3 t1,
+                                   (subtype_pos t1 t2 ->
+                                    subtype_pos t2 t3 ->
+                                    subtype_pos t1 t3) /\
+                                   (subtype_neg t1 t2 ->
+                                    subtype_neg t2 t3 ->
+                                    subtype_neg t1 t3))
+                      (P0 := fun s => forall ta t3 t1,
+                                   (subtype_pos t1 (tann s ta) ->
+                                    subtype_pos (tann s ta) t3 ->
+                                    subtype_pos t1 t3) /\
+                                   (subtype_neg t1 (tann s ta) ->
+                                    subtype_neg (tann s ta) t3 ->
+                                    subtype_neg t1 t3)); intros.
+  apply H.
+
+  split; intros.
+    
+     inversion H; inversion H0; subst; constructor.
+     apply subtype_pos_tyann_transitive with (ta2 := ta); assumption.
+
+     intros.
+     inversion H; inversion H0; subst; constructor.
+     apply subtype_neg_tyann_transitive with (ta2 := ta); assumption.
+
+  split; intros.
+
+     inversion H1; inversion H2; subst; constructor.
+     apply subtype_pos_tyann_transitive with (ta2:=ta); assumption.
+     destruct H0 with (t3:=t7) (t1:=t4).
+     apply H3; assumption.
+     destruct H with (t3:=t1') (t1:=t2'0).
+     apply H4; assumption.
+     
+     inversion H1; inversion H2; subst; constructor.
+     apply subtype_neg_tyann_transitive with (ta2:=ta); assumption.
+     destruct H0 with (t3:=t7) (t1:=t4);
+     apply H4; assumption.
+     destruct H with (t3:=t1') (t1:=t2'0);
+     apply H3; assumption.
+
+  split; intros.
+
+     inversion H1; inversion H2; subst; constructor.
+     apply subtype_pos_tyann_transitive with (ta2:=ta); assumption.
+     destruct H with (t3:=t1'0) (t1:=t4).
+     apply H3; assumption.
+     destruct H0 with (t3:= t2'0) (t1:=t5).
+     apply H3; assumption.
+
+
+     inversion H1; inversion H2; subst; constructor.
+     apply subtype_neg_tyann_transitive with (ta2:=ta); assumption.
+     destruct H with (t3:=t1'0) (t1:=t4); apply H4; assumption.
+     destruct H0 with (t3:=t2'0) (t1:=t5); apply H4; assumption.
+Qed.
+
+Lemma subtype_pos_neg_tyann : forall ta1 ta2,
+  subtype_tyann ta1 ta2 <-> subtype_pos_tyann ta1 ta2 /\ subtype_neg_tyann ta1 ta2.
+Proof.
+  split; intros.
+
+  split; inversion H; constructor; assumption.
+
+  inversion H; 
+  inversion H0; subst; 
+  inversion H1; subst;
+  constructor;
+  assumption.
+Qed.
+
+Lemma subtype_pos_neg3 : forall t1 t2 t3,
+ subtype_pos t1 t2 /\ subtype_pos t2 t3 /\ subtype_neg t1 t2 /\ subtype_neg t2 t3 ->
+ subtype t1 t3.
+Proof.
+ intros.
+ generalize dependent t1.
+ generalize dependent t3.
+ apply type_mut with (P := fun t2 => forall t3 t1 : type,
+                                   subtype_pos t1 t2 /\
+                                   subtype_pos t2 t3 /\ 
+                                   subtype_neg t1 t2 /\
+                                   subtype_neg t2 t3 ->
+                                   subtype t1 t3)
+                     (P0 := fun s => forall ta t3 t1,
+                                   subtype_pos t1 (tann s ta) /\
+                                   subtype_pos (tann s ta) t3 /\
+                                   subtype_neg t1 (tann s ta) /\
+                                   subtype_neg (tann s ta) t3 ->
+                                   subtype t1 t3); intros.
+
+ (* base case*)
+ apply subtype_transitive with (t2 := (tann s t)).
+ destruct H0. destruct H1. destruct H2.
+ destruct t1.
+ inversion H0; subst; inversion H1; subst;
+ inversion H2; subst; inversion H3; subst.
+ constructor.
+ apply subtype_tyann_transitive with (ta2:=t).
+ apply subtype_pos_neg_tyann; split; assumption.
+ apply subtype_tyann_refl.
+
+ (* function *)
+ apply H with (ta:=t).
+
+ split. assumption.
+
+ split.  pose subtype_pos_neg_reflexive.
+ destruct a with (t:=(tann (tfun t2' t4) t)).
+ apply H4.
+
+ split. assumption.
+
+ pose (subtype_pos_neg_reflexive (tann (tfun t2' t4) t)). 
+ destruct a. apply H5.
+
+ (* sum type *)
+ apply H with (ta:=t). 
+
+ split. assumption.
+
+ split. pose (subtype_pos_neg_reflexive (tann (tsum t1' t2') t)).
+ destruct a. assumption.
+
+ split.  assumption.
+
+ pose (subtype_pos_neg_reflexive (tann (tsum t1' t2') t)).
+ destruct a. assumption.
+
+ (* (tann s t) t3 *)
+ apply H with (ta:=t).
+ 
+ pose (subtype_pos_neg_reflexive (tann s t)).
+ destruct a.
+ destruct H0. destruct H3. destruct H4.
+
+ split. assumption.
+
+ split. assumption.
+ 
+ split; assumption.
+
+ (* t tbase *)
+ destruct H. inversion H. subst.
+ destruct H0. inversion H0. subst. 
+ constructor. apply subtype_pos_neg_tyann.
+ split.
+  apply subtype_pos_tyann_transitive with (ta2:=ta); assumption.
+
+  destruct H1. inversion H1. inversion H2. subst.
+  apply subtype_neg_tyann_transitive with (ta2:=ta); assumption.
+
+ (* tfun t *)
+ destruct H1. inversion H1. subst. 
+ destruct H2. inversion H2. subst.
+ destruct H3. inversion H3. subst. inversion H4. subst.
+
+ constructor.
+ apply subtype_pos_neg_tyann.
+ split.
+   apply subtype_pos_tyann_transitive with (ta2:=ta); assumption.
+ 
+   apply subtype_neg_tyann_transitive with (ta2:=ta); assumption.
+ 
+ apply H.
+ split. assumption.
+ split. assumption.
+ split; assumption.
+ 
+ apply H0.
+ split. assumption.
+ split. assumption.
+ split; assumption.
+
+ (* t tsum*)
+ destruct H1. inversion H1. subst.
+ destruct H2. inversion H2. subst.
+ destruct H3. inversion H3. subst. inversion H4. subst.
+
+ constructor.
+ apply subtype_pos_neg_tyann.
+ split.
+   apply subtype_pos_tyann_transitive with (ta2:=ta); assumption.
+
+   apply subtype_neg_tyann_transitive with (ta2:=ta); assumption.
+
+ apply H.
+ split. assumption.
+ split. assumption.
+ split; assumption.
+
+ apply H0.
+ split. assumption.
+ split. assumption.
+ split; assumption.
+Qed.
+
+Lemma subtype_pos_neg : forall t1 t2,
+ subtype t1 t2 <-> subtype_pos t1 t2 /\ subtype_neg t1 t2.
+Proof.
+ intros.
+ split.
+ (* -> *)
+ intros ST. induction ST.
+ 
+   (* tbase *)
+   split.
+
+   constructor.
+   inversion H; constructor.
+
+   constructor.  
+   inversion H; constructor.
+
+   (* tfun *)
+   destruct IHST1. destruct IHST2. split.
+
+   constructor.
+   inversion H; constructor. assumption.
+   assumption.  
+
+   constructor.
+   inversion H; constructor. assumption.
+   assumption.
+
+   (* tsum *)
+   destruct IHST1. destruct IHST2. split.
+
+   constructor.
+   inversion H; constructor. assumption.
+   assumption.
+
+   constructor.
+   inversion H; constructor. assumption.
+   assumption.
+
+ (* <- *)
+ intros.
+ apply subtype_pos_neg3 with (t2 := t2).
+ destruct H.
+ 
+ pose (subtype_pos_neg_reflexive t2). destruct a.
+ 
+ split. assumption.
+ split. assumption.
+ split; assumption.
+Qed.
+
+Inductive all_casts : eterm -> Prop :=
+| ac_var : forall i,
+  all_casts (evar i)
+| ac_appl : forall e1 e2,
+  all_casts e1 ->
+  all_casts e2 ->
+  all_casts (eappl e1 e2)
+| ac_base : forall b va,
+  all_casts (dbase b va)
+| ac_abstr: forall i e va,
+  all_casts e ->
+  all_casts (dabstr i e va)
+| ac_op : forall o e1 e2,
+  all_casts e1 ->
+  all_casts e2 ->
+  all_casts (eop o e1 e2)
+| ac_cast_pos : forall e t1 t2,
+  subtype_pos t1 t2 ->
+  all_casts e ->
+  all_casts (ecast e t1 t2 pos_blame)
+| ac_cast_neg : forall e t1 t2,
+  subtype_neg t1 t2 ->
+  all_casts e ->
+  all_casts (ecast e t1 t2 neg_blame)
+| ac_dinl : forall e va,
+  all_casts e ->
+  all_casts (dinl e va)
+| ac_dinr : forall e va,
+  all_casts e ->
+  all_casts (dinr e va)
+| ac_guard : forall e va join_f,
+  all_casts e ->
+  all_casts (eguard join_f va e)
+| ac_case : forall e1 e2 e3 x y,
+  all_casts e1 ->
+  all_casts e2 ->
+  all_casts e3 ->
+  all_casts (ecase e1 x e2 y e3)
+.
+
+Lemma blame_invariant : forall e e',
+  all_casts e ->
+  smallstep e e' ->
+  all_casts e'.
+Proof.
+  intros e e' AC Smallstep.
+  induction Smallstep.
+  (* eappl -> eguard *)
+  inversion AC. subst. inversion H2. subst.
+
+  induction e1.
+  constructor. unfold ssubst. destruct (beq_id i i0).
+  apply H3. apply H1.
+
+  inversion H1. subst.
+  unfold ssubst. fold ssubst.
+  constructor.
+  constructor.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1_1 i e2))).
+    apply IHe1_1.
+    constructor. constructor. apply H5. apply H3.
+    constructor. apply H5. apply H5.
+  inversion H0. subst. apply H6.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1_2 i e2))).
+    apply IHe1_2.
+    constructor. constructor. apply H7. apply H3.
+    constructor. apply H7. apply H7.
+  inversion H0. subst. apply H6.
+
+  inversion H1. subst.
+  unfold ssubst. fold ssubst.
+  constructor. constructor.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1_1 i e2))).
+    apply IHe1_1.
+    constructor. constructor. apply H5. apply H3.
+    constructor. apply H5. apply H5.
+  inversion H0. subst.
+  apply H7.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1_2 i e2))).
+    apply IHe1_2.
+    constructor. constructor. apply H6. apply H3.
+    constructor. apply H6. apply H6.
+  inversion H0. subst.
+  apply H7.
+
+  inversion H1. subst.
+  unfold ssubst. fold ssubst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1_1 i e2))).
+    apply IHe1_1.
+    constructor. constructor. apply H6. apply H3.
+    constructor. apply H6. apply H6.
+  inversion H0; subst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1_2 i e2))).  
+    apply IHe1_2.
+    constructor. constructor. apply H9. apply H3.
+    constructor. apply H9. apply H9.
+  inversion H4; subst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1_3 i e2))).
+    apply IHe1_3.
+    constructor. constructor. apply H10. apply H3.
+    constructor. apply H10. apply H10.
+  inversion H7; subst.
+  destruct (beq_id i i0); destruct (beq_id i i1);
+  constructor;
+  constructor; assumption.
+  
+  unfold ssubst; fold ssubst.
+  inversion H2; subst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
+    apply IHe1.
+    constructor. constructor. inversion H1; subst. apply H9. apply H9.
+    apply H3.
+    constructor. inversion H1; subst. apply H9. apply H9.
+    inversion H1; subst. apply H9. apply H9.
+  constructor.
+  inversion H0; subst.
+  inversion H1; subst; constructor.
+  apply H8. apply H6.
+  apply H8. apply H6.
+  
+  unfold ssubst; fold ssubst.
+  inversion AC; subst.
+  inversion H2; subst.
+  inversion H4; subst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
+    apply IHe1.
+    constructor. constructor. apply H7. apply H6.
+    constructor. apply H7.
+    apply H7.
+  constructor. constructor.
+  inversion H0; subst. apply H9.
+
+  unfold ssubst; fold ssubst. constructor.  apply H1.
+
+  unfold ssubst; fold ssubst.
+  inversion H2; subst. 
+  inversion H4; subst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
+    apply IHe1.
+    constructor. constructor. apply H5. apply H3.
+    constructor. apply H5.
+    apply H5.
+  inversion H0; subst.
+  destruct (beq_id i i0); constructor; constructor; assumption.
+  
+  unfold ssubst; fold ssubst.
+  inversion H2; subst.
+  inversion H1; subst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
+    apply IHe1.
+    constructor. constructor. apply H5. apply H3.
+    constructor. apply H5.
+    apply H5.
+  inversion H0; subst.
+  constructor. constructor. apply H7.
+
+  unfold ssubst; fold ssubst.
+  inversion H2; subst.
+  inversion H1; subst.
+  assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
+    apply IHe1.
+    constructor. constructor. apply H5. apply H3.
+    constructor. apply H5.
+    apply H5.
+  inversion H0; subst.
+  constructor. constructor. apply H7.
+
+  (* case -> guard *)
+  inversion AC; subst.
+
+  induction e1.
+
+  unfold ssubst; fold ssubst.
+  destruct (beq_id i i0). inversion H3; subst.
+  constructor. apply H1.
+  constructor. apply H6.
+
+  unfold ssubst; fold ssubst.
+  inversion H6; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1_1 i e))).
+    apply IHe1_1.
+    constructor. apply H3.
+    apply H2.
+    apply H7.
+    apply H2.
+  inversion H0. subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1_2 i e))).
+    apply IHe1_2.
+    constructor. apply H3.
+    apply H5.
+    apply H7.
+    apply H5.
+  inversion H1. subst.
+  constructor. constructor. assumption. assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion H6; subst.
+  inversion H3; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1_1 i e))).
+    apply IHe1_1.
+    constructor. constructor. apply H1. apply H2.
+    apply H7.
+    apply H2.
+  inversion H0; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1_2 i e))).
+    apply IHe1_2.
+    constructor. constructor. apply H1. apply H4. 
+    apply H7.
+    apply H4.
+  inversion H5; subst.
+  constructor. constructor. apply H8. apply H10.
+
+  unfold ssubst; fold ssubst.
+  inversion H3; subst.
+  inversion H6; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1_1 i e))).
+     apply IHe1_1.
+     constructor; assumption.
+     apply H5.
+  inversion H0; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1_2 i e))).
+     apply IHe1_2.
+     constructor; assumption.
+     apply H10.
+  inversion H2; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1_3 i e))).
+     apply IHe1_3.
+     constructor; assumption.
+     apply H11.
+  inversion H8; subst.
+  destruct (beq_id i i0); destruct (beq_id i i1); constructor; constructor;
+  assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion AC; subst.
+  assert (all_casts e1).
+    inversion H9; subst; assumption.
+  assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
+    apply IHe1. constructor. apply H4.
+    apply H0. apply H10.
+    apply H0.
+  inversion H1; subst.
+  constructor. inversion H9; subst; constructor; assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion H6; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
+    apply IHe1.
+    constructor; assumption.
+    apply H1.
+  inversion H0; subst.
+  constructor. constructor; assumption.
+
+  unfold ssubst; fold ssubst.
+  constructor. constructor.
+
+  unfold ssubst; fold ssubst.
+  inversion H6; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
+    apply IHe1.
+    constructor; assumption.
+    apply H1.
+  inversion H0; subst.
+  destruct(beq_id i i0); constructor.
+  assumption.
+  constructor. assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion H3; subst.
+  inversion H6; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
+    apply IHe1.
+    constructor; assumption.
+    apply H2.
+  inversion H0; subst.
+  constructor. constructor. apply H5.
+
+  unfold ssubst; fold ssubst.
+  inversion H3; subst.
+  inversion H6; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
+    apply IHe1.
+    constructor; assumption.
+    apply H2.
+  inversion H0; subst.
+  constructor. constructor. apply H5.
+
+  inversion AC; subst.
+
+  induction e2.
+
+  unfold ssubst; fold ssubst.
+  destruct (beq_id j i0). inversion H3; subst.
+  constructor. apply H1.
+  constructor. apply H7.
+
+  unfold ssubst; fold ssubst.
+  inversion H7; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2_1 j e))).
+    apply IHe2_1.
+    constructor. apply H3.
+    apply H6.
+    apply H2.
+    apply H2.
+  inversion H0. subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2_2 j e))).
+    apply IHe2_2.
+    constructor. apply H3.
+    apply H6.
+    apply H5.
+    apply H5.
+  inversion H1. subst.
+  constructor. constructor. assumption. assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion H7; subst.
+  inversion H3; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2_1 j e))).
+    apply IHe2_1.
+    constructor. constructor. apply H1. apply H6.
+    apply H2.
+    apply H2.
+  inversion H0; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2_2 j e))).
+    apply IHe2_2.
+    constructor. constructor. apply H1. apply H6. 
+    apply H4.
+    apply H4.
+  inversion H5; subst.
+  constructor. constructor. apply H8. apply H10.
+
+  unfold ssubst; fold ssubst.
+  inversion H3; subst.
+  inversion H7; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2_1 j e))).
+     apply IHe2_1.
+     constructor; assumption.
+     apply H5.
+  inversion H0; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2_2 j e))).
+     apply IHe2_2.
+     constructor; assumption.
+     apply H10.
+  inversion H2; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2_3 j e))).
+     apply IHe2_3.
+     constructor; assumption.
+     apply H11.
+  inversion H8; subst.
+  destruct (beq_id j i0); destruct (beq_id j i1); constructor; constructor;
+  assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion AC; subst.
+  assert (all_casts e2).
+    inversion H7; subst; assumption.
+  assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
+    apply IHe2. constructor. apply H4.
+    apply H9. apply H0.
+    apply H0.
+  inversion H1; subst.
+  constructor. inversion H10; subst; constructor; assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion H7; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
+    apply IHe2.
+    constructor; assumption.
+    apply H1.
+  inversion H0; subst.
+  constructor. constructor; assumption.
+
+  unfold ssubst; fold ssubst.
+  constructor. constructor.
+
+  unfold ssubst; fold ssubst.
+  inversion H7; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
+    apply IHe2.
+    constructor; assumption.
+    apply H1.
+  inversion H0; subst.
+  destruct(beq_id j i0); constructor.
+  assumption.
+  constructor. assumption.
+
+  unfold ssubst; fold ssubst.
+  inversion H3; subst.
+  inversion H7; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
+    apply IHe2.
+    constructor; assumption.
+    apply H2.
+  inversion H0; subst.
+  constructor. constructor. apply H5.
+
+  unfold ssubst; fold ssubst.
+  inversion H3; subst.
+  inversion H7; subst.
+  assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
+    apply IHe2.
+    constructor; assumption.
+    apply H2.
+  inversion H0; subst.
+  constructor. constructor. apply H5.
+
+  (* guard ... *)
+  constructor.
+
+  inversion AC; subst.
+  inversion H1; subst.
+  constructor; assumption. 
+
+  inversion AC; subst.
+  inversion H2; subst.
+  constructor. assumption.
+
+  inversion AC; subst.
+  inversion H2; subst.
+  constructor; assumption.
+
+  (* eop -> dbase *)
+  constructor.
+
+  (* cast to value *)
+  inversion H0; subst.
+
+  constructor.
+
+  constructor. 
+  inversion AC; subst.
+  constructor.
+  inversion H6; subst.
