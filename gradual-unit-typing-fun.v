@@ -111,7 +111,7 @@ Inductive join_t : join_param -> tyann -> tyann -> tyann -> Prop :=
                   join_t o (taan a1) (taan a2) (taan a)
 .
 
-Lemma join_t_function : forall p ta1 ta2 ta3 ta4,
+(*Lemma join_t_function : forall p ta1 ta2 ta3 ta4,
   (join_t p ta1 ta2 ta3 /\ join_t p ta1 ta2 ta4) ->
   ta3 = ta4.
 Proof.
@@ -122,7 +122,8 @@ Proof.
   apply join_function with (o:=p) (a1:=a1) (a2:=a2).
   split. apply H1. apply H5.
   subst; reflexivity.
-Qed.
+  unfold neutral_join_appl in H4.
+Qed.*)
   
 
 Inductive type : Set :=
@@ -132,6 +133,12 @@ with stype : Set :=
 | tfun : type -> type -> stype
 | tsum : type -> type  -> stype
 .
+
+Definition tann_to_cons (t : type) :=
+  match t with
+  | tann _ (taan _) => vs
+  | tann _ tadyn => vd
+  end. 
 
 Scheme type_mut := Induction for type Sort Prop
 with stype_mut := Induction for stype Sort Prop.
@@ -195,7 +202,9 @@ Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
   vtann_compatible a va1 ta1 ->
   vtann_compatible a va2 ta2 ->
   vcast (dbase b va1) (tann tbase ta1) (tann tbase ta2) (dbase b va2) p
-| vc_lam : forall a va ta va' ta' n t2 x e p t1 t1' t2', 
+| vc_lam : forall a va ta va' ta' n t2 x e p t1 t1' t2' (*mkAnn vtmp*), 
+  (*(t2 = tadyn -> mkAnn = vd) -> 
+  (t2 = taan vtmp -> mkAnn = vs) ->*) 
   vtann_compatible a va ta ->
   vtann_compatible a va' ta' ->
   neutral_join_appl n ->
@@ -203,7 +212,7 @@ Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
         (tann (tfun t1 t2) ta)
         (tann (tfun t1' t2') ta')
         (dabstr x (ecast 
-                    (eappl (dabstr x e ((vann_to_cons va) n)) 
+                    (eappl (dabstr x e (*(tann_to_cons t2 n))*)(vann_to_cons va n))  
                            (ecast (evar x) t1' t1(flip p)))
                     t2 t2'
                     p) va')
@@ -360,7 +369,7 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
 | ty_var : forall te t i,
   Some t = te i ->
   typing te (evar i) t (*RC-T-VAR*)
-| ty_abstr : forall va ta te i e t' t,
+| ty_abstr : forall va ta te i e t' t, (*TODO for t=(s p), join p ta ex*)
   vtann_compatible2 va ta ->
   typing (extend te i t') e t ->
   typing te (dabstr i e va) (tann (tfun t' t) ta) (*RC-T-ABS*)
@@ -1738,53 +1747,74 @@ Proof.
   constructor. constructor.
   (*value, generated from cast*)
   inversion H0; subst.
-  constructor. inversion H2; constructor.
+  constructor. inversion H2; constructor. 
 
   constructor. inversion H2; constructor. 
 
   constructor.
-  destruct t2; destruct va; unfold vann_to_cons; fold vann_to_cons.
-  apply ty_app with (t2:=t0) (ta:=(taan n)) (ta1:=t).
+  destruct t2.
+  replace (vann_to_cons va n) with (tann_to_cons (tann s t) n).
+  destruct t. simpl.
+(*
+  destruct va. unfold vann_to_cons; fold vann_to_cons.
+  unfold vann_to_cons in H0; fold vann_to_cons in H0.
+  inversion H7. subst.  
+  *) 
+
+  apply ty_app with (t2:=t0) (ta:=(taan n)) (ta1:=(taan a0)).
   constructor. 
   constructor.
 
   inversion H7.
   apply exchangeable_context with (te:= (extend empty x t0)).
+  unfold extend.
   intros.
-  pose (extend_shadow type empty t1' t0 x0 x).
-  symmetry. apply e1.
-  apply H14.
+  destruct (beq_id x x0). reflexivity. reflexivity.
 
-  constructor. constructor. unfold extend.
-
-  rewrite <- beq_id_refl. reflexivity.
-
-  inversion H8. apply H10.
-  
-  apply ty_app with (t2:=t0) (ta:=tadyn) (ta1:=t).
-  constructor.  constructor.
-  inversion H7.  
-
-  apply exchangeable_context with (te:= (extend empty x t0)).
-  intros.  
-  pose (extend_shadow type empty t1' t0 x0 x).
-  symmetry. apply e1.
-  apply H14. 
-
-  constructor. constructor. unfold extend.
-  rewrite <- beq_id_refl. reflexivity.
-
-  inversion H8. 
-  apply H11. 
-  
-  inversion H8. subst.
-  inversion H1. inversion H14.
+  apply H14.  
 
   constructor.
+  constructor.
+  unfold extend.
+  pose beq_id_refl.
+  assert (beq_id x x = true).
+  symmetry.
+  apply e with (i:=x).
+  rewrite H4. reflexivity.
 
-  subst. inversion H10.
+  inversion H8.
+  apply H10.
 
-  inversion H8. subst.
+  unfold neutral_join_appl in H3.
+  constructor. apply H3.
+
+  simpl. apply ty_app with (t2:=t0) (ta:=(tadyn)) (ta1:=(tadyn)).
+  constructor.
+  constructor.
+
+  inversion H7.
+  apply exchangeable_context with (te:= (extend empty x t0)).
+  unfold extend; intros. destruct (beq_id x x0). reflexivity. reflexivity.
+
+  apply H14.
+
+  constructor.
+  constructor.
+  unfold extend.
+  pose beq_id_refl.
+  assert (beq_id x x = true).
+  symmetry.
+  apply e with (i:=x).
+  rewrite H4. reflexivity.
+
+  inversion H8.
+  apply H10.
+
+  (*....*)
+  constructor.
+  admit.
+
+  inversion H8. apply H13.
 
   (*eappl, made step on first argument*)
   apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1).
