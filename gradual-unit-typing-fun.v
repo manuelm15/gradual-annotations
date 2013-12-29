@@ -401,7 +401,7 @@ Inductive typing : tenv -> eterm -> type -> Prop :=
 .
 
 
-Inductive stuckterm : eterm -> Prop := (*TODO this might work, but don't be to sure about it*)
+Inductive stuckterm : eterm -> Prop :=
 | fc_base : forall n t a a' p,
   a' <> a ->
   stuckterm (ecast (dbase n (vd a)) t (tann tbase (taan a')) p)
@@ -2874,7 +2874,7 @@ Proof.
   try apply IHSmallstep; try assumption.
 Qed.
 
-(* TODO is this complete? *)
+
 Inductive no_failing_cast : eterm -> Prop :=
 | nfc_base : forall b t a a',
   a' <> a ->
@@ -2888,17 +2888,9 @@ Inductive no_failing_cast : eterm -> Prop :=
 | nfc_inr : forall a a' t t1 t2 e,
   a' <> a ->
   no_failing_cast (ecast (dinr e (vd a)) t (tann (tsum t1 t2) (taan a')) neg_blame)
-| nfc_case_inl : forall e e1 e2 va i j,
-  value e ->
-  no_failing_cast e1 ->
-  no_failing_cast (ecase (dinl e va) i e1 j e2)
-| nfc_case_inr : forall  e e1 e2 va i j,
-  value e ->
-  no_failing_cast e2 ->
-  no_failing_cast (ecase (dinr e va) i e1 j e2)
-| nfc_case : forall e e1 e2 i j,
+| nfc_cast : forall e t1 t2 p,
   no_failing_cast e ->
-  no_failing_cast (ecase e i e1 j e2) 
+  no_failing_cast (ecast e t1 t2 p)
 | nfc_op1 : forall o a1 a2 n1 n2,
   (~ exists a0, join (jop o) a1 a2 a0) -> 
   no_failing_cast (eop o (dbase n1 (vd a1)) (dbase n2 (vd a2)))
@@ -2910,32 +2902,44 @@ Inductive no_failing_cast : eterm -> Prop :=
   (exists a0, join (jop o) a1 a2 a0) ->
   (~ exists b0, b_rel o b1 b2 b0) ->
   no_failing_cast (eop o (dbase b1 (vd a1)) (dbase b2 (vd a2)))
-| nfc_app_left : forall e1 e2,
-  no_failing_cast e1 ->
-  no_failing_cast (eappl e1 e2)
-| nfc_app_right : forall e1 e2,
-  value e1 ->
-  no_failing_cast e2 ->
-  no_failing_cast (eappl e1 e2)
-| nfc_prm_left : forall o e1 e2,
-  no_failing_cast e1 ->
-  no_failing_cast (eop o e1 e2)
-| nfc_prm_right : forall o e1 e2,
-  value e1 ->
-  no_failing_cast e2 ->
-  no_failing_cast (eop o e1 e2)
-| nfc_guard : forall f va e,
+| nfc_guard_base : forall a1 a2 f b,
+  ~ (exists va, f (vd a1) (vd a2) va) ->
+  no_failing_cast (eguard f (vd a1) (dbase b (vd a2)))
+| nfc_guard_abstr : forall a1 a2 f i e,
+  ~ (exists va, f (vd a1) (vd a2) va) ->
+  no_failing_cast (eguard f (vd a1) (dabstr i e (vd a2)))
+| nfc_guard_inl : forall a1 a2 f e,
+  ~ (exists va, f (vd a1) (vd a2) va) ->
+  no_failing_cast (eguard f (vd a1) (dinl e (vd a2)))
+| nfc_guard_inr : forall a1 a2 f e,
+  ~ (exists va, f (vd a1) (vd a2) va) ->
+  no_failing_cast (eguard f (vd a1) (dinr e (vd a2)))
+| nfc_guard : forall e f va,
   no_failing_cast e ->
   no_failing_cast (eguard f va e)
-| nfc_dinl : forall e va,
+| nfc_appl_left : forall e1 e2,
+  no_failing_cast e1 ->
+  no_failing_cast (eappl e1 e2)
+| nfc_appl_right : forall e1 e2,
+  value e1 ->
+  no_failing_cast e2 ->
+  no_failing_cast (eappl e1 e2)
+| nfc_op_left : forall o e1 e2,
+  no_failing_cast e1 ->
+  no_failing_cast (eop o e1 e2)
+| nfc_op_right : forall o e1 e2,
+  value e1 ->
+  no_failing_cast e2 ->
+  no_failing_cast (eop o e1 e2)
+| nfc_case : forall e e1 e2 i j,
+  no_failing_cast e ->
+  no_failing_cast (ecase e i e1 j e2) 
+| nfc_inl_ind : forall e va,
   no_failing_cast e ->
   no_failing_cast (dinl e va)
-| nfc_dinr : forall e va,
+| nfc_inr_ind : forall e va,
   no_failing_cast e ->
-  no_failing_cast (dinr e va)
-| nfc_cast : forall e t1 t2 p,
-  no_failing_cast e ->
-  no_failing_cast (ecast e t1 t2 p).
+  no_failing_cast (dinr e va).
 
 Lemma blame_short : forall e t,
   typing empty e t ->
@@ -2995,4 +2999,75 @@ Proof.
   apply nfc_op3. assumption. assumption.
 
   (* guard term, dynamic annotations, base-value*)
+  apply nfc_guard_base.  assumption.
+
+  (* guard term, dynamic annotations, abstrafction*)
+  apply nfc_guard_abstr. assumption.
+
+  (* guard term, dynamic annotations, inl *)
+  apply nfc_guard_inl. assumption.
+
+  (* guard term, dynamic annotations, inr *)
+  apply nfc_guard_inr. assumption.
+
+  (* guard term, inductive case *)
+  apply nfc_guard. inversion Typing. subst.
+  apply IHStuck with (t:=(tann s ta'')).
+  inversion AC; assumption. assumption.
+
+  (* application, stuck on function *)
+  apply nfc_appl_left. inversion Typing. subst.
+  apply IHStuck with (t:=(tann (tfun t2 (tann s ta1)) ta)).
+
+  inversion AC. assumption. assumption.
+
+  (* application, stuck on argument *)
+  inversion Typing; subst.
+  apply nfc_appl_right. assumption.
   
+  apply IHStuck with (t:=t2).
+  inversion AC. assumption.
+
+  assumption.
+
+  (* operation, stuck on first expression *)
+  inversion Typing; subst.
+
+  apply nfc_op_left.
+  apply IHStuck with (t:=(tann tbase ta1)).
+  inversion AC. assumption.
+  assumption.
+
+  (* operation, stuck on second expression *)
+  inversion Typing; subst.
+
+  apply nfc_op_right. assumption.
+  apply IHStuck with (t:=(tann tbase ta2)).
+
+  inversion AC; assumption.
+  assumption.
+
+  (* case *)
+  apply nfc_case.
+  inversion Typing; subst.
+  apply IHStuck with (t:= (tann (tsum t1 t2) ta1)).
+
+  inversion AC; assumption.
+  assumption.
+
+  (* inl, inductive case *)
+  apply nfc_inl_ind.
+  inversion Typing; subst.
+  apply IHStuck with t1.
+  
+  inversion AC; assumption.
+  assumption.
+
+  (*inr, inductive case *)
+  apply nfc_inr_ind.
+  inversion Typing; subst.
+  apply IHStuck with t2.
+
+  inversion AC; assumption.
+  assumption.
+Qed.
