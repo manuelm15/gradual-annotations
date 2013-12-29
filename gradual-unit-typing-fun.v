@@ -85,13 +85,6 @@ Inductive vann : Set :=
 | vd : ann -> vann  (*dynamic value annotation*)
 .
 
-(*maps a value annotation to it's constructor*)
-Fixpoint vann_to_cons (va : vann) :=
-  match va with
-  | vs _ => vs
-  | vd _ => vd
-  end. 
-
 (* join function on value annotations *)
 Inductive join_v : join_param -> vann -> vann -> vann -> Prop :=
 | join_v_static : forall o a1 a2 a,
@@ -111,7 +104,7 @@ Inductive join_t : join_param -> tyann -> tyann -> tyann -> Prop :=
                   join_t o (taan a1) (taan a2) (taan a)
 .
 
-(*Lemma join_t_function : forall p ta1 ta2 ta3 ta4,
+Lemma join_t_function : forall p ta1 ta2 ta3 ta4,
   (join_t p ta1 ta2 ta3 /\ join_t p ta1 ta2 ta4) ->
   ta3 = ta4.
 Proof.
@@ -122,8 +115,7 @@ Proof.
   apply join_function with (o:=p) (a1:=a1) (a2:=a2).
   split. apply H1. apply H5.
   subst; reflexivity.
-  unfold neutral_join_appl in H4.
-Qed.*)
+Qed.
   
 
 Inductive type : Set :=
@@ -212,7 +204,7 @@ Inductive vcast : eterm -> type -> type -> eterm -> blame -> Prop :=
         (tann (tfun t1 t2) ta)
         (tann (tfun t1' t2') ta')
         (dabstr x (ecast 
-                    (eappl (dabstr x e (*(tann_to_cons t2 n))*)(vann_to_cons va n))  
+                    (eappl (dabstr x e (tann_to_cons t2 n)) (*(vann_to_cons va n))*)  
                            (ecast (evar x) t1' t1(flip p)))
                     t2 t2'
                     p) va')
@@ -903,7 +895,7 @@ Proof.
     destruct e0.
     exists (dabstr i
              (ecast (eappl
-                        (dabstr i e (vs x))
+                        (dabstr i e (tann_to_cons t3 x))
                         (ecast (evar i) t1' t0 (flip p)))
                      t3 t2' p) (vs a)).
 
@@ -918,7 +910,7 @@ Proof.
     destruct e0.
     exists (dabstr i
              (ecast (eappl
-                        (dabstr i e (vd x))
+                        (dabstr i e (tann_to_cons t3 x))
                         (ecast (evar i) t1' t0 (flip p)))
                      t3 t2' p) (vs ann0)).
 
@@ -933,7 +925,7 @@ Proof.
     pose ex_neutral_join_appl; destruct e0.
     exists (dabstr i
              (ecast (eappl
-                        (dabstr i e (vs x))
+                        (dabstr i e (tann_to_cons t3 x))
                         (ecast (evar i) t1' t0 (flip p)))
                      t3 t2' p) (vd a)).
     constructor. constructor. apply vc_lam with (a:=a).
@@ -944,7 +936,7 @@ Proof.
     pose ex_neutral_join_appl; destruct e0.
     left. exists (dabstr i
          (ecast (eappl
-                    (dabstr i e (vd x))
+                    (dabstr i e (tann_to_cons t3 x))
                     (ecast (evar i) t1' t0 (flip p)))
                 t3 t2' p) (vd ann0)).
     constructor. constructor. apply vc_lam with (a:=ann0).
@@ -1753,13 +1745,7 @@ Proof.
 
   constructor.
   destruct t2.
-  replace (vann_to_cons va n) with (tann_to_cons (tann s t) n).
-  destruct t. simpl.
-(*
-  destruct va. unfold vann_to_cons; fold vann_to_cons.
-  unfold vann_to_cons in H0; fold vann_to_cons in H0.
-  inversion H7. subst.  
-  *) 
+    destruct t. simpl.
 
   apply ty_app with (t2:=t0) (ta:=(taan n)) (ta1:=(taan a0)).
   constructor. 
@@ -1767,14 +1753,14 @@ Proof.
 
   inversion H7.
   apply exchangeable_context with (te:= (extend empty x t0)).
-  unfold extend.
-  intros.
-  destruct (beq_id x x0). reflexivity. reflexivity.
+  intros x0. symmetry.
+  apply extend_shadow with (ctxt:=empty) (x1:=x0) (x2:=x). 
 
   apply H14.  
 
   constructor.
   constructor.
+  SearchAbout extend.
   unfold extend.
   pose beq_id_refl.
   assert (beq_id x x = true).
@@ -1794,7 +1780,8 @@ Proof.
 
   inversion H7.
   apply exchangeable_context with (te:= (extend empty x t0)).
-  unfold extend; intros. destruct (beq_id x x0). reflexivity. reflexivity.
+  intros x0. symmetry.
+  apply extend_shadow.  
 
   apply H14.
 
@@ -1812,10 +1799,27 @@ Proof.
 
   (*....*)
   constructor.
-  admit.
-
+ 
   inversion H8. apply H13.
 
+  (*dinl*)
+  constructor. destruct H2; constructor.
+
+  constructor; inversion H7; subst.
+  
+  assumption.
+
+  inversion H8. subst. assumption.
+
+  (*dinr*)
+  constructor. destruct H2; constructor.
+
+  constructor; inversion H7; subst.
+  
+  assumption.
+
+  inversion H8. subst. assumption.
+ 
   (*eappl, made step on first argument*)
   apply ty_app with (t2:=t2) (ta:=ta) (ta1:=ta1).
   apply IHHss. apply H1. apply H3. apply H5.
@@ -1849,7 +1853,7 @@ Proof.
   (*ecast*)
   constructor. apply IHHss. apply H5. apply H6.
 Qed.
-
+ 
 (* type preservation carries over multiple steps*)
 Lemma transitive_type_preservation : forall e e' t,
   typing empty e t ->
@@ -2415,7 +2419,7 @@ Proof.
   apply H3. apply H1.
 
   inversion H1. subst.
-  unfold ssubst. fold ssubst.
+  simpl.
   constructor.
   constructor.
   assert (all_casts (eguard (join_v appl) va (ssubst e1_1 i e2))).
@@ -2430,7 +2434,7 @@ Proof.
   inversion H0. subst. apply H6.
 
   inversion H1. subst.
-  unfold ssubst. fold ssubst.
+  simpl.
   constructor. constructor.
   assert (all_casts (eguard (join_v appl) va (ssubst e1_1 i e2))).
     apply IHe1_1.
@@ -2446,7 +2450,7 @@ Proof.
   apply H7.
 
   inversion H1. subst.
-  unfold ssubst. fold ssubst.
+  simpl.
   assert (all_casts (eguard (join_v appl) va (ssubst e1_1 i e2))).
     apply IHe1_1.
     constructor. constructor. apply H6. apply H3.
@@ -2466,7 +2470,7 @@ Proof.
   constructor;
   constructor; assumption.
   
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H2; subst.
   assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
     apply IHe1.
@@ -2480,7 +2484,7 @@ Proof.
   apply H8. apply H6.
   apply H8. apply H6.
   
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion AC; subst.
   inversion H2; subst.
   inversion H4; subst.
@@ -2492,9 +2496,9 @@ Proof.
   constructor. constructor.
   inversion H0; subst. apply H9.
 
-  unfold ssubst; fold ssubst. constructor.  apply H1.
+  simpl. constructor.  apply H1.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H2; subst. 
   inversion H4; subst.
   assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
@@ -2505,7 +2509,7 @@ Proof.
   inversion H0; subst.
   destruct (beq_id i i0); constructor; constructor; assumption.
   
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H2; subst.
   inversion H1; subst.
   assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
@@ -2516,7 +2520,7 @@ Proof.
   inversion H0; subst.
   constructor. constructor. apply H7.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H2; subst.
   inversion H1; subst.
   assert (all_casts (eguard (join_v appl) va (ssubst e1 i e2))).
@@ -2532,12 +2536,12 @@ Proof.
 
   induction e1.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   destruct (beq_id i i0). inversion H3; subst.
   constructor. apply H1.
   constructor. apply H6.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H6; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e1_1 i e))).
     apply IHe1_1.
@@ -2555,7 +2559,7 @@ Proof.
   inversion H1. subst.
   constructor. constructor. assumption. assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H6; subst.
   inversion H3; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e1_1 i e))).
@@ -2572,7 +2576,7 @@ Proof.
   inversion H5; subst.
   constructor. constructor. apply H8. apply H10.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H3; subst.
   inversion H6; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e1_1 i e))).
@@ -2593,7 +2597,7 @@ Proof.
   destruct (beq_id i i0); destruct (beq_id i i1); constructor; constructor;
   assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion AC; subst.
   assert (all_casts e1).
     inversion H9; subst; assumption.
@@ -2604,7 +2608,7 @@ Proof.
   inversion H1; subst.
   constructor. inversion H9; subst; constructor; assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H6; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
     apply IHe1.
@@ -2613,10 +2617,10 @@ Proof.
   inversion H0; subst.
   constructor. constructor; assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   constructor. constructor.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H6; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
     apply IHe1.
@@ -2627,7 +2631,7 @@ Proof.
   assumption.
   constructor. assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H3; subst.
   inversion H6; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
@@ -2637,7 +2641,7 @@ Proof.
   inversion H0; subst.
   constructor. constructor. apply H5.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H3; subst.
   inversion H6; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e1 i e))).
@@ -2651,12 +2655,12 @@ Proof.
 
   induction e2.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   destruct (beq_id j i0). inversion H3; subst.
   constructor. apply H1.
   constructor. apply H7.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H7; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e2_1 j e))).
     apply IHe2_1.
@@ -2674,7 +2678,7 @@ Proof.
   inversion H1. subst.
   constructor. constructor. assumption. assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H7; subst.
   inversion H3; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e2_1 j e))).
@@ -2691,7 +2695,7 @@ Proof.
   inversion H5; subst.
   constructor. constructor. apply H8. apply H10.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H3; subst.
   inversion H7; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e2_1 j e))).
@@ -2712,7 +2716,7 @@ Proof.
   destruct (beq_id j i0); destruct (beq_id j i1); constructor; constructor;
   assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion AC; subst.
   assert (all_casts e2).
     inversion H7; subst; assumption.
@@ -2723,7 +2727,7 @@ Proof.
   inversion H1; subst.
   constructor. inversion H10; subst; constructor; assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H7; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
     apply IHe2.
@@ -2732,10 +2736,10 @@ Proof.
   inversion H0; subst.
   constructor. constructor; assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   constructor. constructor.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H7; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
     apply IHe2.
@@ -2746,7 +2750,7 @@ Proof.
   assumption.
   constructor. assumption.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H3; subst.
   inversion H7; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
@@ -2756,7 +2760,7 @@ Proof.
   inversion H0; subst.
   constructor. constructor. apply H5.
 
-  unfold ssubst; fold ssubst.
+  simpl.
   inversion H3; subst.
   inversion H7; subst.
   assert (all_casts (eguard (join_v case) va (ssubst e2 j e))).
@@ -2789,9 +2793,206 @@ Proof.
 
   constructor.
 
+  (* cast function application *)
   constructor. 
   inversion AC; subst.
   constructor.
   inversion H6; subst.
 
   inversion H0. subst.
+
+  apply H13.
+
+  constructor. constructor.
+  inversion H9. assumption.
+
+  constructor. inversion H6. assumption.
+  constructor.
+
+  constructor. inversion H6. assumption.
+
+  constructor. constructor. inversion H9. assumption.
+
+  constructor. inversion H6. assumption.
+
+  constructor.
+
+  (* cast dinl*)
+
+  constructor. inversion AC.  
+  constructor. inversion H5. assumption.
+  
+  inversion H8. assumption.
+
+  constructor. subst. inversion H5. assumption.
+
+  inversion H8. assumption.
+
+  (* cast dinr*)  
+
+  constructor. inversion AC.  
+  constructor. inversion H5. assumption.
+  
+  inversion H8. assumption.
+
+  constructor. subst. inversion H5. assumption.
+
+  inversion H8. assumption.
+
+  (* function application *)
+  
+  inversion AC; constructor; subst.
+  apply IHSmallstep. apply H1.
+  apply H2.
+
+  inversion AC; subst; constructor.
+  constructor. inversion H1. subst. apply H0.
+  apply IHSmallstep. apply H2. 
+
+  (* operation application *)
+  constructor. apply IHSmallstep. inversion AC; subst. assumption.
+  inversion AC; subst. assumption.
+
+  constructor. inversion AC. subst. apply H1.
+  apply IHSmallstep. inversion AC. assumption.
+
+  (* guard term *)
+  inversion AC; constructor. subst. apply IHSmallstep. assumption.
+
+  (* case *)
+  inversion AC; constructor. subst. apply IHSmallstep. assumption.
+  assumption. assumption.
+
+  (* dinl *)
+  inversion AC; constructor. apply IHSmallstep. assumption.
+
+  (* dinr *)
+  inversion AC; constructor; apply IHSmallstep; assumption.
+
+  (* ecast*)
+  inversion AC; subst; constructor; try assumption;
+  try apply IHSmallstep; try assumption.
+Qed.
+
+(* TODO is this complete? *)
+Inductive no_failing_cast : eterm -> Prop :=
+| nfc_base : forall b t a a',
+  a' <> a ->
+  no_failing_cast (ecast (dbase b (vd a)) t (tann tbase (taan a')) neg_blame)
+| nfc_abstr : forall a a' t t1 t2 i e,
+  a' <> a ->
+  no_failing_cast (ecast (dabstr i e (vd a)) t (tann (tfun t1 t2) (taan a'))  neg_blame)
+| nfc_inl : forall a a' t t1 t2 e,
+  a' <> a ->
+  no_failing_cast (ecast (dinl e (vd a)) t (tann (tsum t1 t2) (taan a')) neg_blame)
+| nfc_inr : forall a a' t t1 t2 e,
+  a' <> a ->
+  no_failing_cast (ecast (dinr e (vd a)) t (tann (tsum t1 t2) (taan a')) neg_blame)
+| nfc_case_inl : forall e e1 e2 va i j,
+  value e ->
+  no_failing_cast e1 ->
+  no_failing_cast (ecase (dinl e va) i e1 j e2)
+| nfc_case_inr : forall  e e1 e2 va i j,
+  value e ->
+  no_failing_cast e2 ->
+  no_failing_cast (ecase (dinr e va) i e1 j e2)
+| nfc_case : forall e e1 e2 i j,
+  no_failing_cast e ->
+  no_failing_cast (ecase e i e1 j e2) 
+| nfc_op1 : forall o a1 a2 n1 n2,
+  (~ exists a0, join (jop o) a1 a2 a0) -> 
+  no_failing_cast (eop o (dbase n1 (vd a1)) (dbase n2 (vd a2)))
+| nfc_op2 : forall o a1 a2 b1 b2,
+  (exists a0, join (jop o) a1 a2 a0) ->
+  (~ exists b0, b_rel o b1 b2 b0) ->
+  no_failing_cast (eop o (dbase b1 (vs a1)) (dbase b2 (vs a2)))
+| nfc_op3 : forall o a1 a2 b1 b2,
+  (exists a0, join (jop o) a1 a2 a0) ->
+  (~ exists b0, b_rel o b1 b2 b0) ->
+  no_failing_cast (eop o (dbase b1 (vd a1)) (dbase b2 (vd a2)))
+| nfc_app_left : forall e1 e2,
+  no_failing_cast e1 ->
+  no_failing_cast (eappl e1 e2)
+| nfc_app_right : forall e1 e2,
+  value e1 ->
+  no_failing_cast e2 ->
+  no_failing_cast (eappl e1 e2)
+| nfc_prm_left : forall o e1 e2,
+  no_failing_cast e1 ->
+  no_failing_cast (eop o e1 e2)
+| nfc_prm_right : forall o e1 e2,
+  value e1 ->
+  no_failing_cast e2 ->
+  no_failing_cast (eop o e1 e2)
+| nfc_guard : forall f va e,
+  no_failing_cast e ->
+  no_failing_cast (eguard f va e)
+| nfc_dinl : forall e va,
+  no_failing_cast e ->
+  no_failing_cast (dinl e va)
+| nfc_dinr : forall e va,
+  no_failing_cast e ->
+  no_failing_cast (dinr e va)
+| nfc_cast : forall e t1 t2 p,
+  no_failing_cast e ->
+  no_failing_cast (ecast e t1 t2 p).
+
+Lemma blame_short : forall e t,
+  typing empty e t ->
+  all_casts e ->
+  stuckterm e ->
+  no_failing_cast e.
+Proof.
+  intros e t Typing AC Stuck. generalize dependent t.
+  induction Stuck; intros t0 Typing.
+  (* cast base value *)
+  inversion AC. subst.
+  inversion Typing. subst.
+  inversion H8. subst. inversion H6. subst.
+  inversion H2. inversion H3. 
+ 
+  subst. apply nfc_base. assumption.
+  (* cast function *)
+
+  inversion AC. subst.
+  inversion Typing. subst.
+  inversion H8. subst. inversion H7. subst.
+  inversion H2. subst. inversion H6.
+
+  subst. apply nfc_abstr. assumption.
+  (* cast dinl*)
+
+  inversion AC. subst.
+  inversion Typing. subst.
+  inversion H8. subst. inversion H4. subst.
+  inversion H2. subst. inversion H10.
+
+  apply nfc_inl. assumption.
+
+  (* cast dinr *)
+  inversion AC. subst.
+  inversion Typing. subst.
+  inversion H8. subst. inversion H4. subst.
+  inversion H2. subst. inversion H10.
+
+  apply nfc_inr. assumption.
+
+  (* cast *)
+  apply nfc_cast.
+  inversion Typing. subst.
+  apply IHStuck with (t:=t1).
+
+  inversion AC. subst. assumption. assumption.
+  assumption.
+
+  (* operation, both dynamic, no join of annotations possible *)
+  apply nfc_op1. apply H.
+
+  (* operation, both static, operation not defined on values *)
+  apply nfc_op2. assumption. assumption.
+
+  (* operation, both dynamic, operation not defined on values *)
+  apply nfc_op3. assumption. assumption.
+
+  (* guard term, dynamic annotations, base-value*)
+  
